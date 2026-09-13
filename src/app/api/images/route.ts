@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { saveImage } from "@/lib/db";
 import { apiError } from "@/lib/http";
-import { requireApiMember } from "@/lib/auth";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 const TYPES: Record<string, number[]> = { "image/jpeg": [0xff, 0xd8, 0xff], "image/png": [0x89, 0x50, 0x4e, 0x47], "image/webp": [0x52, 0x49, 0x46, 0x46] };
 export async function POST(request: Request) {
   try {
-    const { supabase } = await requireApiMember();
+    const supabase = createSupabaseServerClient();
     const form = await request.formData();
     const file = form.get("image");
     if (!(file instanceof File)) throw new Error("Choose a receipt image.");

@@ -1,14 +1,14 @@
 create table if not exists public.roommates (id text primary key check (id in ('michael', 'kevin', 'feo', 'saketh')), name text not null unique);
 insert into public.roommates (id, name) values ('michael', 'Michael'), ('kevin', 'Kevin'), ('feo', 'Feo'), ('saketh', 'Saketh') on conflict (id) do update set name = excluded.name;
 create table if not exists public.app_members (user_id uuid primary key references auth.users(id) on delete cascade, display_name text not null, created_at timestamptz not null default now());
-create table if not exists public.receipt_images (id uuid primary key, object_path text not null unique, mime_type text not null check (mime_type in ('image/jpeg', 'image/png', 'image/webp')), uploaded_by uuid not null default auth.uid() references auth.users(id), created_at timestamptz not null default now());
+create table if not exists public.receipt_images (id uuid primary key, object_path text not null unique, mime_type text not null check (mime_type in ('image/jpeg', 'image/png', 'image/webp')), created_at timestamptz not null default now());
 create table if not exists public.receipts (id uuid primary key, merchant text not null, purchased_at date not null, payer_id text not null references public.roommates(id), subtotal_cents integer not null, tax_cents integer not null, adjustment_cents integer not null, total_cents integer not null, image_id uuid references public.receipt_images(id), created_at timestamptz not null default now(), updated_at timestamptz not null default now());
 create table if not exists public.receipt_items (id uuid primary key, receipt_id uuid not null references public.receipts(id) on delete cascade, description text not null, quantity text, unit_price_cents integer, line_total_cents integer not null, sort_order integer not null);
 create table if not exists public.item_shares (receipt_item_id uuid not null references public.receipt_items(id) on delete cascade, roommate_id text not null references public.roommates(id), allocated_cents integer not null, primary key (receipt_item_id, roommate_id));
 create index if not exists receipts_date on public.receipts (purchased_at desc, created_at desc);
 create index if not exists items_receipt on public.receipt_items (receipt_id, sort_order);
 
-create or replace function public.is_app_member() returns boolean language sql stable security definer set search_path = public as $$ select exists (select 1 from public.app_members where user_id = auth.uid()); $$;
+create or replace function public.is_app_member() returns boolean language sql stable security definer set search_path = public as $$ select auth.role() = 'service_role' or exists (select 1 from public.app_members where user_id = auth.uid()); $$;
 alter table public.roommates enable row level security;
 alter table public.app_members enable row level security;
 alter table public.receipt_images enable row level security;
@@ -60,5 +60,5 @@ begin
 end; $$;
 revoke all on function public.save_receipt(jsonb, timestamptz) from public;
 revoke all on function public.delete_receipt(uuid, timestamptz) from public;
-grant execute on function public.save_receipt(jsonb, timestamptz) to authenticated;
-grant execute on function public.delete_receipt(uuid, timestamptz) to authenticated;
+grant execute on function public.save_receipt(jsonb, timestamptz) to service_role;
+grant execute on function public.delete_receipt(uuid, timestamptz) to service_role;
