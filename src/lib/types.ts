@@ -45,3 +45,10 @@ export type PairBalance = {
   creditor: RoommateId | null;
   cents: number;
 };
+export type BalancePayment = {
+  id: string;
+  payerId: RoommateId;
+  recipientId: RoommateId;
+  cents: number;
+  createdAt: string;
+};

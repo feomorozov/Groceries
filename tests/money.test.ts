@@ -21,4 +21,9 @@ test("tax and adjustment are allocated by positive item value", () => { const r=
 test("allocations always reconcile with discounts and negative lines", () => { const r=receipt("a","michael",[[1000,["michael","kevin","feo"]],[-100,["michael","kevin","feo"]]],{taxCents:73,adjustmentCents:-23,totalCents:950}); const a=allocateReceipt(r); assert.equal(Object.values(a.portions).reduce((n,c)=>n+c,0),950); });
 test("editing a receipt changes derived balances", () => { const old=calculateBalances([receipt("a","michael",[[1000,["kevin"]]])])[0]; const edited=calculateBalances([receipt("a","michael",[[400,["kevin"]]])])[0]; assert.equal(old.cents,1000); assert.equal(edited.cents,400); });
 test("deleting a receipt removes it from derived balances", () => { const before=calculateBalances([receipt("a","michael",[[1000,["kevin"]]])])[0]; const after=calculateBalances([])[0]; assert.equal(before.cents,1000); assert.equal(after.cents,0); });
+test("recorded payments reduce a pair's outstanding balance", () => {
+  const payments = [{ id:"00000000-0000-4000-8000-000000000010", payerId:"kevin" as RoommateId, recipientId:"michael" as RoommateId, cents:400, createdAt:"2026-09-13T12:00:00.000Z" }];
+  const balance = calculateBalances([receipt("a","michael",[[1000,["kevin"]]])], payments).find((value) => value.first === "michael" && value.second === "kevin");
+  assert.deepEqual(balance, { first:"michael", second:"kevin", debtor:"kevin", creditor:"michael", cents:600 });
+});
 test("unreconciled receipts are rejected", () => assert.throws(()=>allocateReceipt(receipt("a","michael",[[100,["kevin"]]],{totalCents:101})),/Reconcile/));

@@ -25,12 +25,14 @@ test("manual receipt can be created, edited, and deleted", async ({ page }, test
   await page.getByLabel("Apples amount").blur();
   await page.getByLabel("Receipt total").fill("10.00");
   await page.getByLabel("Receipt total").blur();
+  await page.getByRole("button", { name: "Choose people" }).click();
+  await page.getByLabel("Everyone").check();
   await page.getByRole("button", { name: "Reconcile" }).click();
   await Promise.all([page.waitForURL(/\/receipts\/[0-9a-f-]{36}$/), page.getByRole("button", { name: "Save receipt" }).click()]);
   await Promise.all([page.waitForURL("http://localhost:3000/"), page.getByRole("link", { name: "Back to groceries" }).click()]);
   await page.reload();
   await expect(page.locator(".trip").filter({ hasText: "Test Market" })).toBeVisible();
-  const initialBalance = testInfo.project.name === "mobile" ? page.locator(".mobile-pair").filter({ hasText: "Michael → Kevin" }) : page.locator(".pair-value").filter({ hasText: "Michael owes Kevin" });
+  const initialBalance = testInfo.project.name === "mobile" ? page.locator(".mobile-pair").filter({ hasText: /Michael.*Kevin/ }) : page.locator(".pair-value").filter({ hasText: /Michael.*Kevin/ });
   await expect(initialBalance).toBeVisible();
   await page.locator(".trip").filter({ hasText: "Test Market" }).click();
   await page.getByLabel("Receipt total").fill("8.00"); await page.getByLabel("Receipt total").blur();
@@ -38,7 +40,7 @@ test("manual receipt can be created, edited, and deleted", async ({ page }, test
   await page.getByRole("button", { name: "Reconcile" }).click();
   await Promise.all([page.waitForResponse((response) => response.request().method() === "PUT" && response.url().includes("/api/receipts/")), page.getByRole("button", { name: "Save receipt" }).click()]);
   await Promise.all([page.waitForURL("http://localhost:3000/"), page.getByRole("link", { name: "Back to groceries" }).click()]);
-  const editedBalance = testInfo.project.name === "mobile" ? page.locator(".mobile-pair").filter({ hasText: "Michael → Kevin" }) : page.locator(".pair-value").filter({ hasText: "Michael owes Kevin" });
+  const editedBalance = testInfo.project.name === "mobile" ? page.locator(".mobile-pair").filter({ hasText: /Michael.*Kevin/ }) : page.locator(".pair-value").filter({ hasText: /Michael.*Kevin/ });
   await expect(editedBalance.getByText("$2.00", { exact:true })).toBeVisible();
   await page.locator(".trip").filter({ hasText: "Test Market" }).click();
   await page.getByRole("button", { name: "Delete receipt" }).click();
@@ -68,6 +70,8 @@ test("receipt image persists and extraction failure keeps manual entry available
   await page.getByLabel("Store").fill("Image Test"); await page.getByLabel("Item name").fill("Milk");
   await page.getByLabel("Milk amount").fill("1.00"); await page.getByLabel("Milk amount").blur();
   await page.getByLabel("Receipt total").fill("1.00"); await page.getByLabel("Receipt total").blur();
+  await page.getByRole("button", { name: "Choose people" }).click();
+  await page.getByLabel("Everyone").check();
   await page.getByRole("button", { name: "Reconcile" }).click();
   await Promise.all([page.waitForURL(/\/receipts\/[0-9a-f-]{36}$/), page.getByRole("button", { name: "Save receipt" }).click()]);
   await page.reload();

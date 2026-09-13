@@ -2,6 +2,11 @@ import { z } from "zod";
 import { ALL_IDS } from "./types";
 
 export const centsSchema = z.number().int().min(-999999999).max(999999999);
+export const paymentSchema = z.object({
+  payerId: z.enum(ALL_IDS as ["michael", "kevin", "feo", "saketh"]),
+  recipientId: z.enum(ALL_IDS as ["michael", "kevin", "feo", "saketh"]),
+  cents: z.number().int().min(1, "Enter a payment greater than zero.").max(999999999),
+}).refine((payment) => payment.payerId !== payment.recipientId, "Choose two different roommates.");
 export const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
   const date = new Date(`${value}T12:00:00Z`);
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;

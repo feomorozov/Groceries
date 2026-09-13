@@ -1,4 +1,4 @@
-import { ALL_IDS, type PairBalance, type ReceiptInput, type RoommateId } from "./types";
+import { ALL_IDS, type BalancePayment, type PairBalance, type ReceiptInput, type RoommateId } from "./types";
 
 // Parse decimal strings directly; dollars never enter floating-point arithmetic.
 export function parseMoney(value: string): number | null {
@@ -61,12 +61,13 @@ export function allocateReceipt(receipt: ReceiptInput) {
   return { items, portions };
 }
 
-export function calculateBalances(receipts: ReceiptInput[]): PairBalance[] {
+export function calculateBalances(receipts: ReceiptInput[], payments: BalancePayment[] = []): PairBalance[] {
   const debts = Object.fromEntries(ALL_IDS.map((id) => [id, Object.fromEntries(ALL_IDS.map((other) => [other, 0]))])) as Record<RoommateId, Record<RoommateId, number>>;
   for (const receipt of receipts) {
     const { portions } = allocateReceipt(receipt);
     for (const id of ALL_IDS) if (id !== receipt.payerId) debts[id][receipt.payerId] += portions[id];
   }
+  for (const payment of payments) debts[payment.payerId][payment.recipientId] -= payment.cents;
   return ALL_IDS.flatMap((first, i) => ALL_IDS.slice(i + 1).map((second) => {
     const net = debts[first][second] - debts[second][first];
     return { first, second, debtor: net === 0 ? null : net > 0 ? first : second, creditor: net === 0 ? null : net > 0 ? second : first, cents: Math.abs(net) };
