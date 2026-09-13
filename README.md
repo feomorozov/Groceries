@@ -1,6 +1,6 @@
 # Groceries
 
-A small, persistent receipt and balance tracker for Michael, Kevin, Feo, and Saketh.
+A small, persistent receipt and balance tracker for the roomates
 
 ## Run locally
 
