@@ -1,5 +1,6 @@
 # Groceries
 
+<<<<<<< HEAD
 A shared receipt and balances app for Michael, Kevin, Feo, and Saketh. It runs as a Next.js app on Vercel, uses Supabase for Auth, Postgres, and private receipt-image Storage, and calls OpenAI only from a server route to read receipts.
 
 ## What is safe to commit
@@ -35,6 +36,9 @@ insert into public.app_members (user_id, display_name) values
 ```
 
 Only members in this allow-list can read, upload, change, or delete household data. Add another person later with one more `insert` after they have signed in once.
+=======
+A small, persistent receipt and balance tracker for the roomates
+>>>>>>> a0b647cc0f1281731fb3e8794c74a546053a6799
 
 ## Run locally
 
