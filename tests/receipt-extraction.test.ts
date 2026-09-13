@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { OpenAIReceiptExtractionProvider, ReceiptExtractionError } from "../src/lib/receipt-extraction";
+import { expandReceiptItems } from "../src/lib/receipt-items";
 import { extractionSchema } from "../src/lib/validation";
 
 test("receipt extraction preserves printed item data and uncertainty", () => {
@@ -65,4 +66,22 @@ test("receipt reader returns a sanitized OpenAI diagnostic on provider failure",
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = originalKey;
   }
+});
+
+test("counted receipt lines become separately assignable items", () => {
+  const [first, second, third] = expandReceiptItems([{
+    sku: "12345",
+    rawDescription: "APPLE",
+    description: "Apple",
+    quantity: "3",
+    unitPriceCents: null,
+    itemDiscountCents: -100,
+    lineTotalCents: 1000,
+    isUncertain: false,
+  }]);
+
+  assert.deepEqual([first.lineTotalCents, second.lineTotalCents, third.lineTotalCents], [334, 333, 333]);
+  assert.deepEqual([first.itemDiscountCents, second.itemDiscountCents, third.itemDiscountCents], [-34, -33, -33]);
+  assert.deepEqual([first.quantity, second.quantity, third.quantity], [null, null, null]);
+  assert.deepEqual([first.unitPriceCents, second.unitPriceCents, third.unitPriceCents], [334, 333, 333]);
 });

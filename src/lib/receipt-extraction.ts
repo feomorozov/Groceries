@@ -45,8 +45,8 @@ const responseSchema = {
       required: ["sku", "rawDescription", "description", "quantity", "unitPriceCents", "itemDiscountCents", "lineTotalCents", "isUncertain"], properties: {
         sku: { type: ["string", "null"], description: "Printed SKU or item code, if present." },
         rawDescription: { type: ["string", "null"], description: "Product code or abbreviated description exactly as printed." },
-        description: { type: "string" }, quantity: { type: ["string", "null"] },
-        unitPriceCents: { type: ["integer", "null"] }, lineTotalCents: { type: ["integer", "null"] },
+        description: { type: "string" }, quantity: { type: ["string", "null"], description: "Always null because each purchased unit is a separate item." },
+        unitPriceCents: { type: ["integer", "null"], description: "The individual item's price before any item-level adjustment, when known." }, lineTotalCents: { type: ["integer", "null"], description: "The individual item's actual charged price." },
         itemDiscountCents: { type: ["integer", "null"], description: "Signed item-level coupon or adjustment in cents; a discount is negative." },
         isUncertain: { type: "boolean" },
       } } },
@@ -71,9 +71,9 @@ export class OpenAIReceiptExtractionProvider implements ReceiptExtractionProvide
           input: [{ role: "user", content: [
             { type: "input_text", text: `You are a grocery receipt extraction assistant. Read this receipt image and extract only the purchased products, for any retailer.
 
-For every purchased item, return its printed SKU/item code in sku when present; rawDescription as the product code or abbreviated text exactly as printed; and description as the best conservative human-readable name. Return quantity when identifiable, unitPriceCents when identifiable, and lineTotalCents as the actual amount charged after any line-level discount. Put an item-specific coupon, discount, or adjustment in itemDiscountCents as signed integer cents (negative for a reduction). Mark isUncertain true for a line with any unclear material value.
+For every purchased item, return its printed SKU/item code in sku when present; rawDescription as the product code or abbreviated text exactly as printed; and description as the best conservative human-readable name. Each individual purchased unit must be its own item, including identical products on a receipt line marked with a quantity. Do not group duplicates. Set quantity to null for every item. Return unitPriceCents when identifiable, and lineTotalCents as that individual item's actual amount charged after any line-level discount. When a counted line has a total that does not divide evenly, distribute the cents across the separate items so their sum remains exact. Put an item-specific coupon, discount, or adjustment in itemDiscountCents as signed integer cents (negative for a reduction). Mark isUncertain true for a line with any unclear material value.
 
-Keep repeated purchases as separate items unless the receipt clearly gives one quantity. Exclude subtotals, tax, receipt-level discounts, fees, payment/tender details, membership numbers, transaction IDs, and change from items. Do not make coupons their own items: attach a clear product-level coupon to that product; put receipt-level discounts only in discountCents. Do not use objects around the receipt as evidence.
+Exclude subtotals, tax, receipt-level discounts, fees, payment/tender details, membership numbers, transaction IDs, and change from items. Do not make coupons their own items: attach a clear product-level coupon to that product; put receipt-level discounts only in discountCents. Do not use objects around the receipt as evidence.
 
 Return every monetary value as signed integer cents. Extract merchant, purchase date, subtotal, tax, receipt-level discounts/savings, fees, and final total when available. Use null for an unreadable value, do not invent details, and explain uncertainty in warnings. Check that item prices, subtotal, and total are reasonably consistent.` },
             { type: "input_image", image_url: `data:${image.mime};base64,${base64}`, detail: "high" },

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { ReceiptEditor } from "./receipt-editor";
-import { ALL_IDS, ROOMMATES, type ReceiptInput, type RoommateId } from "@/lib/types";
+import { expandReceiptItems } from "@/lib/receipt-items";
+import { ROOMMATES, type ReceiptInput, type RoommateId } from "@/lib/types";
 import type { ExtractedReceipt } from "@/lib/validation";
 
 function today() { const now = new Date(); return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10); }
@@ -19,11 +20,11 @@ async function shrinkImage(file: File): Promise<File> {
 }
 function makeManual(payerId: RoommateId, imageId: string | null): ReceiptInput {
   return { id: crypto.randomUUID(), merchant: "", purchasedAt: today(), payerId, subtotalCents: 0, taxCents: 0, adjustmentCents: 0, totalCents: 0, imageId,
-    items: [{ id: crypto.randomUUID(), sku: null, rawDescription: null, description: "", quantity: null, unitPriceCents: null, itemDiscountCents: null, lineTotalCents: 0, isUncertain: false, roommateIds: [...ALL_IDS] }] };
+    items: [{ id: crypto.randomUUID(), sku: null, rawDescription: null, description: "", quantity: null, unitPriceCents: null, itemDiscountCents: null, lineTotalCents: 0, isUncertain: false, roommateIds: [] }] };
 }
 function fromExtraction(data: ExtractedReceipt, payerId: RoommateId, imageId: string): ReceiptInput {
-  const items = data.items.map((item) => ({ id: crypto.randomUUID(), sku: item.sku, rawDescription: item.rawDescription, description: item.description || "Unread item", quantity: item.quantity, unitPriceCents: item.unitPriceCents, itemDiscountCents: item.itemDiscountCents, lineTotalCents: item.lineTotalCents ?? 0, isUncertain: item.isUncertain, roommateIds: [...ALL_IDS] }));
-  if (!items.length) items.push({ id: crypto.randomUUID(), sku: null, rawDescription: null, description: "", quantity: null, unitPriceCents: null, itemDiscountCents: null, lineTotalCents: 0, isUncertain: false, roommateIds: [...ALL_IDS] });
+  const items = expandReceiptItems(data.items).map((item) => ({ id: crypto.randomUUID(), sku: item.sku, rawDescription: item.rawDescription, description: item.description || "Unread item", quantity: item.quantity, unitPriceCents: item.unitPriceCents, itemDiscountCents: item.itemDiscountCents, lineTotalCents: item.lineTotalCents ?? 0, isUncertain: item.isUncertain, roommateIds: [] }));
+  if (!items.length) items.push({ id: crypto.randomUUID(), sku: null, rawDescription: null, description: "", quantity: null, unitPriceCents: null, itemDiscountCents: null, lineTotalCents: 0, isUncertain: false, roommateIds: [] });
   const itemSum = items.reduce((sum, item) => sum + item.lineTotalCents, 0);
   const subtotal = data.subtotalCents ?? itemSum;
   const adjustment = (data.discountCents ?? 0) + (data.feeCents ?? 0);

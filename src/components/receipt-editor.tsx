@@ -1,20 +1,33 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MoneyField } from "./money-field";
 import { allocateReceipt, formatMoney } from "@/lib/money";
 import { ALL_IDS, ROOMMATES, nameOf, type Receipt, type ReceiptInput, type RoommateId } from "@/lib/types";
 
-const newItem = () => ({ id: crypto.randomUUID(), sku: null, rawDescription: null, description: "", quantity: null, unitPriceCents: null, itemDiscountCents: null, lineTotalCents: 0, isUncertain: false, roommateIds: [...ALL_IDS] });
+const newItem = () => ({ id: crypto.randomUUID(), sku: null, rawDescription: null, description: "", quantity: null, unitPriceCents: null, itemDiscountCents: null, lineTotalCents: 0, isUncertain: false, roommateIds: [] });
 function errorMessage(body: unknown) { return typeof body === "object" && body && "error" in body ? String(body.error) : "Something went wrong."; }
 function SplitPicker({ selected, onChange }: { selected: RoommateId[]; onChange: (ids: RoommateId[]) => void }) {
+  const root = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
   const ordered = ALL_IDS.filter((id) => selected.includes(id));
   const label = ordered.length === 4 ? "Everyone" : ordered.length ? ordered.map(nameOf).join(", ") : "Choose people";
   const toggle = (id: RoommateId, checked: boolean) => onChange(checked ? ALL_IDS.filter((x) => x === id || selected.includes(x)) : selected.filter((x) => x !== id));
-  return <details className="split"><summary>{label}</summary><div className="split-menu">
-    <label className="check everyone"><input type="checkbox" checked={selected.length === 4} onChange={(e) => onChange(e.target.checked ? [...ALL_IDS] : [])} />Everyone</label>
-    {ROOMMATES.map((r) => <label className="check" key={r.id}><input type="checkbox" checked={selected.includes(r.id)} onChange={(e) => toggle(r.id, e.target.checked)} />{r.name}</label>)}
-  </div></details>;
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsidePress = (event: PointerEvent) => { if (root.current && !root.current.contains(event.target as Node)) setOpen(false); };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", closeOnOutsidePress);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => { document.removeEventListener("pointerdown", closeOnOutsidePress); document.removeEventListener("keydown", closeOnEscape); };
+  }, [open]);
+  return <div className="split" ref={root}>
+    <button type="button" className="split-trigger" aria-expanded={open} onClick={() => setOpen((value) => !value)}>{label}</button>
+    {open && <div className="split-menu">
+      <label className="check everyone"><input type="checkbox" checked={selected.length === 4} onChange={(e) => onChange(e.target.checked ? [...ALL_IDS] : [])} />Everyone</label>
+      {ROOMMATES.map((r) => <label className="check" key={r.id}><input type="checkbox" checked={selected.includes(r.id)} onChange={(e) => toggle(r.id, e.target.checked)} />{r.name}</label>)}
+    </div>}
+  </div>;
 }
 export function ReceiptEditor({ initial, warnings = [] }: { initial: ReceiptInput | Receipt; warnings?: string[] }) {
   const router = useRouter();
@@ -71,7 +84,6 @@ export function ReceiptEditor({ initial, warnings = [] }: { initial: ReceiptInpu
     <div className="items-head"><span>Item</span><span style={{textAlign:"right"}}>Amount</span><span>Split</span><span/></div>
     {receipt.items.map((item) => <div className="item-row" key={item.id}>
       <div className="item-description"><input aria-label="Item name" placeholder="Item name" value={item.description} onChange={(e) => updateItem(item.id, { description:e.target.value })} />
-        <div className="item-details"><label>Qty <input aria-label={`${item.description || "Item"} quantity`} value={item.quantity ?? ""} onChange={(e) => updateItem(item.id, { quantity:e.target.value || null })} /></label><label>Unit $ <MoneyField value={item.unitPriceCents ?? 0} onChange={(v) => updateItem(item.id, { unitPriceCents:v })} className="detail-money" label={`${item.description || "Item"} unit price`} /></label></div>
         {(item.sku || (item.rawDescription && item.rawDescription !== item.description) || item.itemDiscountCents !== null || item.isUncertain) && <small>{[item.sku && `SKU ${item.sku}`, item.rawDescription && item.rawDescription !== item.description ? item.rawDescription : null, item.itemDiscountCents !== null ? `Line adjustment ${formatMoney(item.itemDiscountCents)}` : null, item.isUncertain ? "Check extraction" : null].filter(Boolean).join(" · ")}</small>}
       </div>
       <div className="amount-wrap"><span>$</span><MoneyField value={item.lineTotalCents} onChange={(v) => updateItem(item.id, { lineTotalCents:v })} className="amount-input" label={`${item.description || "Item"} amount`} /></div>
@@ -79,7 +91,7 @@ export function ReceiptEditor({ initial, warnings = [] }: { initial: ReceiptInpu
       <button type="button" className="remove" aria-label={`Remove ${item.description || "item"}`} onClick={() => update("items", receipt.items.filter((i) => i.id !== item.id))}>×</button>
     </div>)}
     <div className="items-tools"><button className="secondary-btn" type="button" onClick={() => update("items", [...receipt.items, newItem()])}>Add item</button>
-      <label className="split-all">Split all <select defaultValue="everyone" onChange={(e) => { const ids = e.target.value === "everyone" ? [...ALL_IDS] : [e.target.value as RoommateId]; update("items", receipt.items.map((item) => ({ ...item, roommateIds:ids }))); }}><option value="everyone">Everyone</option>{ROOMMATES.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+      <label className="split-all">Split all <select defaultValue="" onChange={(e) => { const ids = e.target.value === "" ? [] : e.target.value === "everyone" ? [...ALL_IDS] : [e.target.value as RoommateId]; update("items", receipt.items.map((item) => ({ ...item, roommateIds:ids }))); }}><option value="">Choose people</option><option value="everyone">Everyone</option>{ROOMMATES.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
     </div>
     <div className="reconcile"><div className="reconcile-line">Items <b>{formatMoney(itemSum)}</b> · Tax & adjustments <b>{formatMoney(receipt.taxCents + receipt.adjustmentCents)}</b> · Receipt <b>{formatMoney(receipt.totalCents)}</b>{difference !== 0 && <> · Difference <b>{formatMoney(difference)}</b></>}</div>
       {difference !== 0 || receipt.subtotalCents !== itemSum ? <button type="button" className="secondary-btn" onClick={reconcile}>Reconcile</button> : <span className="tiny">Reconciled exactly</span>}
