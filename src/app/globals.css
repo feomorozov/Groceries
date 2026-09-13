@@ -109,7 +109,11 @@ h2 { margin:0; font-size:18px; line-height:1.2; letter-spacing:-.015em; font-wei
 .payer-option input { position:absolute; opacity:0; }
 .payer-option label { display:flex; align-items:center; justify-content:center; min-height:42px; padding:0 15px; border:1px solid #ddd; border-radius:6px; font-size:13px; cursor:pointer; }
 .payer-option input:checked + label { border-color:var(--ink); background:var(--ink); color:white; }
-.upload-actions { display:flex; gap:14px; align-items:center; margin-top:28px; }
+.upload-actions { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin-top:28px; }
+.upload-error { flex-basis:100%; }
+.diagnostics { margin-top:10px; color:var(--secondary); }
+.diagnostics summary { cursor:pointer; font-size:12px; }
+.diagnostics pre { max-height:260px; overflow:auto; margin:7px 0 0; padding:10px; border:1px solid var(--line); background:var(--soft); color:var(--secondary); font:11px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
 dialog { width:min(100% - 40px,420px); border:0; border-radius:8px; padding:25px; box-shadow:0 16px 60px rgba(0,0,0,.18); }
 dialog::backdrop { background:rgba(0,0,0,.25); }
 .dialog-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:24px; }

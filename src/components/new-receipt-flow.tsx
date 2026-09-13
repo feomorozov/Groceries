@@ -30,33 +30,42 @@ function fromExtraction(data: ExtractedReceipt, payerId: RoommateId, imageId: st
   const tax = data.taxCents ?? 0;
   return { id: crypto.randomUUID(), merchant: data.merchant ?? "", purchasedAt: data.purchasedAt ?? today(), payerId, subtotalCents: subtotal, taxCents: tax, adjustmentCents: adjustment, totalCents: data.totalCents ?? subtotal + tax + adjustment, imageId, items };
 }
-async function responseError(response: Response) { try { const body = await response.json(); return String(body.error || "Something went wrong."); } catch { return "Something went wrong."; } }
+
+type ReceiptDiagnostics = Record<string, unknown>;
+class ApiRequestError extends Error { constructor(message: string, readonly diagnostics: ReceiptDiagnostics | null) { super(message); } }
+async function responseError(response: Response) {
+  try {
+    const body = await response.json() as { error?: unknown; diagnostics?: unknown };
+    const diagnostics = body.diagnostics && typeof body.diagnostics === "object" && !Array.isArray(body.diagnostics) ? body.diagnostics as ReceiptDiagnostics : null;
+    return new ApiRequestError(String(body.error || "Something went wrong."), diagnostics);
+  } catch { return new ApiRequestError("Something went wrong.", null); }
+}
 
 export function NewReceiptFlow() {
   const [file, setFile] = useState<File | null>(null); const [preview, setPreview] = useState<string | null>(null);
   const [payer, setPayer] = useState<RoommateId | null>(null); const [imageId, setImageId] = useState<string | null>(null);
   const [editor, setEditor] = useState<ReceiptInput | null>(null); const [warnings, setWarnings] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [dragging, setDragging] = useState(false);
-  const choose = (chosen: File | undefined) => { if (!chosen) return; if (preview) URL.revokeObjectURL(preview); setFile(chosen); setPreview(URL.createObjectURL(chosen)); setImageId(null); setError(""); };
+  const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [diagnostics, setDiagnostics] = useState<ReceiptDiagnostics | null>(null); const [dragging, setDragging] = useState(false);
+  const choose = (chosen: File | undefined) => { if (!chosen) return; if (preview) URL.revokeObjectURL(preview); setFile(chosen); setPreview(URL.createObjectURL(chosen)); setImageId(null); setError(""); setDiagnostics(null); };
   const selectedPayer = () => payer ?? (document.querySelector<HTMLInputElement>('input[name="payer"]:checked')?.value as RoommateId | undefined) ?? null;
   const upload = async () => {
     if (imageId) return imageId; if (!file) return null;
     const prepared = await shrinkImage(file); const form = new FormData(); form.set("image", prepared);
-    const response = await fetch("/api/images", { method: "POST", body: form }); if (!response.ok) throw new Error(await responseError(response));
+    const response = await fetch("/api/images", { method: "POST", body: form }); if (!response.ok) throw await responseError(response);
     const body = await response.json(); setImageId(body.id); return body.id as string;
   };
   const manual = async () => {
-    const paidBy = selectedPayer(); if (!paidBy) { setError("Choose who paid."); return; } setBusy(true); setError("");
-    try { setEditor(makeManual(paidBy, await upload())); } catch (e) { setError(e instanceof Error ? e.message : "Couldn't upload this image."); } finally { setBusy(false); }
+    const paidBy = selectedPayer(); if (!paidBy) { setError("Choose who paid."); setDiagnostics(null); return; } setBusy(true); setError(""); setDiagnostics(null);
+    try { setEditor(makeManual(paidBy, await upload())); } catch (e) { setError(e instanceof Error ? e.message : "Couldn't upload this image."); setDiagnostics(e instanceof ApiRequestError ? e.diagnostics : null); } finally { setBusy(false); }
   };
   const read = async () => {
-    const paidBy = selectedPayer(); if (!paidBy) { setError("Choose who paid."); return; } if (!file) { setError("Choose a receipt image."); return; } setBusy(true); setError("");
+    const paidBy = selectedPayer(); if (!paidBy) { setError("Choose who paid."); setDiagnostics(null); return; } if (!file) { setError("Choose a receipt image."); setDiagnostics(null); return; } setBusy(true); setError(""); setDiagnostics(null);
     try {
       const id = await upload(); const response = await fetch("/api/receipts/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageId: id }) });
-      if (!response.ok) throw new Error(await responseError(response)); const data = await response.json() as ExtractedReceipt;
+      if (!response.ok) throw await responseError(response); const data = await response.json() as ExtractedReceipt;
       const moreWarnings = [...data.warnings]; if (data.items.some((item) => item.lineTotalCents === null || item.isUncertain)) moreWarnings.push("One or more item details could not be read confidently. Check the marked lines below.");
       setWarnings(moreWarnings); setEditor(fromExtraction(data, paidBy, id!));
-    } catch (e) { setError(e instanceof Error ? e.message : "Couldn't read this receipt."); } finally { setBusy(false); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Couldn't read this receipt."); setDiagnostics(e instanceof ApiRequestError ? e.diagnostics : null); } finally { setBusy(false); }
   };
   if (editor) return <ReceiptEditor initial={editor} warnings={warnings} />;
   return <div className="upload">
@@ -72,6 +81,6 @@ export function NewReceiptFlow() {
     </div>
     <p className="photo-note">JPEG, PNG, or WebP · up to 8 MB after compression</p>
     <fieldset className="payer"><legend className="label">Who paid?</legend><div className="payer-options">{ROOMMATES.map((roommate) => <div className="payer-option" key={roommate.id}><input id={`payer-${roommate.id}`} type="radio" name="payer" value={roommate.id} checked={payer === roommate.id} onChange={() => setPayer(roommate.id)} /><label htmlFor={`payer-${roommate.id}`}>{roommate.name}</label></div>)}</div></fieldset>
-    <div className="upload-actions"><button type="button" className="primary" disabled={busy || !file} onClick={read}>{busy ? "Reading receipt…" : "Read receipt"}</button><button type="button" className="text-btn" disabled={busy} onClick={manual}>Enter manually</button>{error && <span className="error" role="alert">{error}</span>}</div>
+    <div className="upload-actions"><button type="button" className="primary" disabled={busy || !file} onClick={read}>{busy ? "Reading receipt…" : "Read receipt"}</button><button type="button" className="text-btn" disabled={busy} onClick={manual}>Enter manually</button>{error && <div className="upload-error error" role="alert"><div>{error}</div>{diagnostics && <details className="diagnostics" open><summary>Troubleshooting details</summary><pre>{JSON.stringify(diagnostics, null, 2)}</pre></details>}</div>}</div>
   </div>;
 }
