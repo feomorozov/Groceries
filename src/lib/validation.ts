@@ -18,10 +18,14 @@ export const receiptSchema = z.object({
   imageId: z.uuid().nullable(),
   items: z.array(z.object({
     id: z.uuid(),
+    sku: z.string().trim().max(120).nullable(),
+    rawDescription: z.string().trim().max(300).nullable(),
     description: z.string().trim().min(1, "Name each item.").max(300),
     quantity: z.string().trim().max(40).nullable(),
     unitPriceCents: centsSchema.nullable(),
+    itemDiscountCents: centsSchema.nullable(),
     lineTotalCents: centsSchema,
+    isUncertain: z.boolean(),
     roommateIds: z.array(z.enum(ALL_IDS as ["michael", "kevin", "feo", "saketh"])).min(1, "Assign every item.").max(4).refine((ids) => new Set(ids).size === ids.length),
   })).min(1, "Add at least one item.").max(300),
 }).strict().superRefine((receipt, ctx) => {
@@ -41,10 +45,14 @@ export const extractionSchema = z.object({
   feeCents: centsSchema.nullable(),
   totalCents: centsSchema.nullable(),
   items: z.array(z.object({
+    sku: z.string().max(120).nullable(),
+    rawDescription: z.string().max(300).nullable(),
     description: z.string().max(300),
     quantity: z.string().max(40).nullable(),
     unitPriceCents: centsSchema.nullable(),
+    itemDiscountCents: centsSchema.nullable(),
     lineTotalCents: centsSchema.nullable(),
+    isUncertain: z.boolean(),
   })).max(300),
   warnings: z.array(z.string().max(500)).max(30),
 });

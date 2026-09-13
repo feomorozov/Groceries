@@ -10,10 +10,18 @@ export const nameOf = (id: RoommateId) => ROOMMATES.find((r) => r.id === id)!.na
 
 export type ReceiptItem = {
   id: string;
+  /** Printed SKU or item code, when the receipt makes one available. */
+  sku: string | null;
+  /** Product text exactly as printed on the receipt. */
+  rawDescription: string | null;
   description: string;
   quantity: string | null;
   unitPriceCents: number | null;
+  /** Signed line-level discount or adjustment; a discount is negative. */
+  itemDiscountCents: number | null;
   lineTotalCents: number;
+  /** Lets the editor call out a line the receipt reader could not read confidently. */
+  isUncertain: boolean;
   roommateIds: RoommateId[];
 };
 export type ReceiptInput = {

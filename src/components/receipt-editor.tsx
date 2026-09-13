@@ -5,7 +5,7 @@ import { MoneyField } from "./money-field";
 import { allocateReceipt, formatMoney } from "@/lib/money";
 import { ALL_IDS, ROOMMATES, nameOf, type Receipt, type ReceiptInput, type RoommateId } from "@/lib/types";
 
-const newItem = () => ({ id: crypto.randomUUID(), description: "", quantity: null, unitPriceCents: null, lineTotalCents: 0, roommateIds: [...ALL_IDS] });
+const newItem = () => ({ id: crypto.randomUUID(), sku: null, rawDescription: null, description: "", quantity: null, unitPriceCents: null, itemDiscountCents: null, lineTotalCents: 0, isUncertain: false, roommateIds: [...ALL_IDS] });
 function errorMessage(body: unknown) { return typeof body === "object" && body && "error" in body ? String(body.error) : "Something went wrong."; }
 function SplitPicker({ selected, onChange }: { selected: RoommateId[]; onChange: (ids: RoommateId[]) => void }) {
   const ordered = ALL_IDS.filter((id) => selected.includes(id));
@@ -72,6 +72,7 @@ export function ReceiptEditor({ initial, warnings = [] }: { initial: ReceiptInpu
     {receipt.items.map((item) => <div className="item-row" key={item.id}>
       <div className="item-description"><input aria-label="Item name" placeholder="Item name" value={item.description} onChange={(e) => updateItem(item.id, { description:e.target.value })} />
         <div className="item-details"><label>Qty <input aria-label={`${item.description || "Item"} quantity`} value={item.quantity ?? ""} onChange={(e) => updateItem(item.id, { quantity:e.target.value || null })} /></label><label>Unit $ <MoneyField value={item.unitPriceCents ?? 0} onChange={(v) => updateItem(item.id, { unitPriceCents:v })} className="detail-money" label={`${item.description || "Item"} unit price`} /></label></div>
+        {(item.sku || (item.rawDescription && item.rawDescription !== item.description) || item.itemDiscountCents !== null || item.isUncertain) && <small>{[item.sku && `SKU ${item.sku}`, item.rawDescription && item.rawDescription !== item.description ? item.rawDescription : null, item.itemDiscountCents !== null ? `Line adjustment ${formatMoney(item.itemDiscountCents)}` : null, item.isUncertain ? "Check extraction" : null].filter(Boolean).join(" · ")}</small>}
       </div>
       <div className="amount-wrap"><span>$</span><MoneyField value={item.lineTotalCents} onChange={(v) => updateItem(item.id, { lineTotalCents:v })} className="amount-input" label={`${item.description || "Item"} amount`} /></div>
       <SplitPicker selected={item.roommateIds} onChange={(ids) => updateItem(item.id, { roommateIds:ids })} />

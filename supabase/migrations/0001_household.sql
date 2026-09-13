@@ -3,7 +3,7 @@ insert into public.roommates (id, name) values ('michael', 'Michael'), ('kevin',
 create table if not exists public.app_members (user_id uuid primary key references auth.users(id) on delete cascade, display_name text not null, created_at timestamptz not null default now());
 create table if not exists public.receipt_images (id uuid primary key, object_path text not null unique, mime_type text not null check (mime_type in ('image/jpeg', 'image/png', 'image/webp')), created_at timestamptz not null default now());
 create table if not exists public.receipts (id uuid primary key, merchant text not null, purchased_at date not null, payer_id text not null references public.roommates(id), subtotal_cents integer not null, tax_cents integer not null, adjustment_cents integer not null, total_cents integer not null, image_id uuid references public.receipt_images(id), created_at timestamptz not null default now(), updated_at timestamptz not null default now());
-create table if not exists public.receipt_items (id uuid primary key, receipt_id uuid not null references public.receipts(id) on delete cascade, description text not null, quantity text, unit_price_cents integer, line_total_cents integer not null, sort_order integer not null);
+create table if not exists public.receipt_items (id uuid primary key, receipt_id uuid not null references public.receipts(id) on delete cascade, sku text, raw_description text, description text not null, quantity text, unit_price_cents integer, item_discount_cents integer, line_total_cents integer not null, is_uncertain boolean not null default false, sort_order integer not null);
 create table if not exists public.item_shares (receipt_item_id uuid not null references public.receipt_items(id) on delete cascade, roommate_id text not null references public.roommates(id), allocated_cents integer not null, primary key (receipt_item_id, roommate_id));
 create index if not exists receipts_date on public.receipts (purchased_at desc, created_at desc);
 create index if not exists items_receipt on public.receipt_items (receipt_id, sort_order);
@@ -40,7 +40,7 @@ begin
   end if;
   for item_value in select value from jsonb_array_elements(coalesce(p_receipt->'items', '[]'::jsonb)) loop
     item_id := (item_value->>'id')::uuid;
-    insert into public.receipt_items (id, receipt_id, description, quantity, unit_price_cents, line_total_cents, sort_order) values (item_id, v_receipt_id, item_value->>'description', nullif(item_value->>'quantity', ''), nullif(item_value->>'unitPriceCents', '')::integer, (item_value->>'lineTotalCents')::integer, item_index);
+    insert into public.receipt_items (id, receipt_id, sku, raw_description, description, quantity, unit_price_cents, item_discount_cents, line_total_cents, is_uncertain, sort_order) values (item_id, v_receipt_id, nullif(item_value->>'sku', ''), nullif(item_value->>'rawDescription', ''), item_value->>'description', nullif(item_value->>'quantity', ''), nullif(item_value->>'unitPriceCents', '')::integer, nullif(item_value->>'itemDiscountCents', '')::integer, (item_value->>'lineTotalCents')::integer, coalesce((item_value->>'isUncertain')::boolean, false), item_index);
     for share_value in select value from jsonb_array_elements(coalesce(item_value->'shares', '[]'::jsonb)) loop
       insert into public.item_shares (receipt_item_id, roommate_id, allocated_cents) values (item_id, share_value->>'roommateId', (share_value->>'allocatedCents')::integer);
     end loop;

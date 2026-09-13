@@ -3,14 +3,14 @@ import { allocateReceipt, calculateBalances } from "./money";
 import { ALL_IDS, type Receipt, type ReceiptInput, type ReceiptItem, type RoommateId, type TripSummary } from "./types";
 
 type ReceiptRow = { id: string; merchant: string; purchased_at: string; payer_id: RoommateId; subtotal_cents: number; tax_cents: number; adjustment_cents: number; total_cents: number; image_id: string | null; created_at: string; updated_at: string; receipt_items?: ItemRow[] };
-type ItemRow = { id: string; description: string; quantity: string | null; unit_price_cents: number | null; line_total_cents: number; sort_order: number; item_shares?: ShareRow[] };
+type ItemRow = { id: string; sku: string | null; raw_description: string | null; description: string; quantity: string | null; unit_price_cents: number | null; item_discount_cents: number | null; line_total_cents: number; is_uncertain: boolean | null; sort_order: number; item_shares?: ShareRow[] };
 type ShareRow = { roommate_id: RoommateId; allocated_cents: number };
 export type StoredImage = { id: string; objectPath: string; mime: string };
 
 function fail(error: { message: string } | null) { if (error) throw new Error(error.message); }
 function toReceipt(row: ReceiptRow): Receipt {
   return { id: row.id, merchant: row.merchant, purchasedAt: row.purchased_at, payerId: row.payer_id, subtotalCents: row.subtotal_cents, taxCents: row.tax_cents, adjustmentCents: row.adjustment_cents, totalCents: row.total_cents, imageId: row.image_id, createdAt: row.created_at, updatedAt: row.updated_at,
-    items: (row.receipt_items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item): ReceiptItem => ({ id: item.id, description: item.description, quantity: item.quantity, unitPriceCents: item.unit_price_cents, lineTotalCents: item.line_total_cents, roommateIds: (item.item_shares ?? []).map((share) => share.roommate_id).filter((id): id is RoommateId => ALL_IDS.includes(id)) })) };
+    items: (row.receipt_items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item): ReceiptItem => ({ id: item.id, sku: item.sku ?? null, rawDescription: item.raw_description ?? null, description: item.description, quantity: item.quantity, unitPriceCents: item.unit_price_cents, itemDiscountCents: item.item_discount_cents ?? null, lineTotalCents: item.line_total_cents, isUncertain: item.is_uncertain ?? false, roommateIds: (item.item_shares ?? []).map((share) => share.roommate_id).filter((id): id is RoommateId => ALL_IDS.includes(id)) })) };
 }
 const receiptSelect = "*, receipt_items(*, item_shares(roommate_id, allocated_cents))";
 

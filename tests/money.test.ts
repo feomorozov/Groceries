@@ -7,7 +7,7 @@ const ids = ["michael", "kevin", "feo", "saketh"] as RoommateId[];
 function receipt(id: string, payerId: RoommateId, itemData: Array<[number, RoommateId[]]>, extras: Partial<ReceiptInput> = {}): ReceiptInput {
   const sum = itemData.reduce((n,[c]) => n+c,0);
   return { id, merchant:"Store", purchasedAt:"2026-09-12", payerId, subtotalCents:sum, taxCents:0, adjustmentCents:0, totalCents:sum, imageId:null,
-    items:itemData.map(([lineTotalCents,roommateIds],i)=>({id:`00000000-0000-4000-8000-${String(i+1).padStart(12,"0")}`,description:`Item ${i}`,quantity:null,unitPriceCents:null,lineTotalCents,roommateIds})), ...extras };
+    items:itemData.map(([lineTotalCents,roommateIds],i)=>({id:`00000000-0000-4000-8000-${String(i+1).padStart(12,"0")}`,sku:null,rawDescription:null,description:`Item ${i}`,quantity:null,unitPriceCents:null,itemDiscountCents:null,lineTotalCents,isUncertain:false,roommateIds})), ...extras };
 }
 test("single person owns the full item", () => assert.deepEqual(allocateReceipt(receipt("a","michael",[[1200,["feo"]]])).portions, {michael:0,kevin:0,feo:1200,saketh:0}));
 test("two people split equally", () => assert.deepEqual(allocateWeighted(1200,[1,1]),[600,600]));

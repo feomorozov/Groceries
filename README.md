@@ -13,7 +13,8 @@ All Supabase calls happen on the server. `SUPABASE_SECRET_KEY` and `OPENAI_API_K
 1. Create a Supabase project.
 2. Open **SQL Editor** and run [`supabase/migrations/0001_household.sql`](supabase/migrations/0001_household.sql).
 3. If you already ran the earlier migration with email login, then also run [`supabase/migrations/0002_remove_email_auth.sql`](supabase/migrations/0002_remove_email_auth.sql). It makes the existing project work without user accounts.
-4. Open **Project Settings → API**. Copy the Project URL and a **secret key**. Do not use the publishable key. The secret key is for the Next.js server only.
+4. Run [`supabase/migrations/0003_receipt_item_metadata.sql`](supabase/migrations/0003_receipt_item_metadata.sql). It adds the printed SKU/raw text, line discount, and uncertainty fields used by receipt reading.
+5. Open **Project Settings → API**. Copy the Project URL and a **secret key**. Do not use the publishable key. The secret key is for the Next.js server only.
 
 The migration keeps the Supabase tables and Storage bucket private. The Vercel server uses the secret key; browsers never contact Supabase directly.
 
@@ -52,6 +53,8 @@ npm run dev
 | `RECEIPT_MODEL` | Optional; `gpt-4.1-mini` is the default |
 
 4. Redeploy after adding or changing environment variables.
+
+If the app says receipt reading is not configured, `OPENAI_API_KEY` is missing from the Vercel environment used by that deployment. Add it as a **Sensitive** value for Production (and Preview when testing preview deployments), then redeploy. The key must be named exactly `OPENAI_API_KEY`; adding it only to `.env.local` configures your computer, not Vercel.
 
 ## Checks
 

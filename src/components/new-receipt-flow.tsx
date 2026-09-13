@@ -19,11 +19,11 @@ async function shrinkImage(file: File): Promise<File> {
 }
 function makeManual(payerId: RoommateId, imageId: string | null): ReceiptInput {
   return { id: crypto.randomUUID(), merchant: "", purchasedAt: today(), payerId, subtotalCents: 0, taxCents: 0, adjustmentCents: 0, totalCents: 0, imageId,
-    items: [{ id: crypto.randomUUID(), description: "", quantity: null, unitPriceCents: null, lineTotalCents: 0, roommateIds: [...ALL_IDS] }] };
+    items: [{ id: crypto.randomUUID(), sku: null, rawDescription: null, description: "", quantity: null, unitPriceCents: null, itemDiscountCents: null, lineTotalCents: 0, isUncertain: false, roommateIds: [...ALL_IDS] }] };
 }
 function fromExtraction(data: ExtractedReceipt, payerId: RoommateId, imageId: string): ReceiptInput {
-  const items = data.items.map((item) => ({ id: crypto.randomUUID(), description: item.description || "Unread item", quantity: item.quantity, unitPriceCents: item.unitPriceCents, lineTotalCents: item.lineTotalCents ?? 0, roommateIds: [...ALL_IDS] }));
-  if (!items.length) items.push({ id: crypto.randomUUID(), description: "", quantity: null, unitPriceCents: null, lineTotalCents: 0, roommateIds: [...ALL_IDS] });
+  const items = data.items.map((item) => ({ id: crypto.randomUUID(), sku: item.sku, rawDescription: item.rawDescription, description: item.description || "Unread item", quantity: item.quantity, unitPriceCents: item.unitPriceCents, itemDiscountCents: item.itemDiscountCents, lineTotalCents: item.lineTotalCents ?? 0, isUncertain: item.isUncertain, roommateIds: [...ALL_IDS] }));
+  if (!items.length) items.push({ id: crypto.randomUUID(), sku: null, rawDescription: null, description: "", quantity: null, unitPriceCents: null, itemDiscountCents: null, lineTotalCents: 0, isUncertain: false, roommateIds: [...ALL_IDS] });
   const itemSum = items.reduce((sum, item) => sum + item.lineTotalCents, 0);
   const subtotal = data.subtotalCents ?? itemSum;
   const adjustment = (data.discountCents ?? 0) + (data.feeCents ?? 0);
@@ -54,7 +54,7 @@ export function NewReceiptFlow() {
     try {
       const id = await upload(); const response = await fetch("/api/receipts/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageId: id }) });
       if (!response.ok) throw new Error(await responseError(response)); const data = await response.json() as ExtractedReceipt;
-      const moreWarnings = [...data.warnings]; if (data.items.some((item) => item.lineTotalCents === null)) moreWarnings.push("One or more item prices could not be read. Check the amounts below.");
+      const moreWarnings = [...data.warnings]; if (data.items.some((item) => item.lineTotalCents === null || item.isUncertain)) moreWarnings.push("One or more item details could not be read confidently. Check the marked lines below.");
       setWarnings(moreWarnings); setEditor(fromExtraction(data, paidBy, id!));
     } catch (e) { setError(e instanceof Error ? e.message : "Couldn't read this receipt."); } finally { setBusy(false); }
   };
