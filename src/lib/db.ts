@@ -1,151 +1,60 @@
-import { DatabaseSync } from "node:sqlite";
-import { mkdirSync } from "node:fs";
-import path from "node:path";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { allocateReceipt, calculateBalances } from "./money";
-import { ALL_IDS, ROOMMATES, type Receipt, type ReceiptInput, type ReceiptItem, type RoommateId, type TripSummary } from "./types";
+import { ALL_IDS, type Receipt, type ReceiptInput, type ReceiptItem, type RoommateId, type TripSummary } from "./types";
 
-type SqlValue = string | number | null | Uint8Array;
-type Row = Record<string, SqlValue>;
-const dbPath = path.resolve(/* turbopackIgnore: true */ process.env.DATABASE_PATH || "./data/groceries.sqlite");
-mkdirSync(path.dirname(dbPath), { recursive: true });
+type ReceiptRow = { id: string; merchant: string; purchased_at: string; payer_id: RoommateId; subtotal_cents: number; tax_cents: number; adjustment_cents: number; total_cents: number; image_id: string | null; created_at: string; updated_at: string; receipt_items?: ItemRow[] };
+type ItemRow = { id: string; description: string; quantity: string | null; unit_price_cents: number | null; line_total_cents: number; sort_order: number; item_shares?: ShareRow[] };
+type ShareRow = { roommate_id: RoommateId; allocated_cents: number };
+export type StoredImage = { id: string; objectPath: string; mime: string };
 
-const globalDb = globalThis as unknown as { groceriesDb?: DatabaseSync };
-export const db = globalDb.groceriesDb ?? new DatabaseSync(dbPath, { timeout: 5000 });
-if (process.env.NODE_ENV !== "production") globalDb.groceriesDb = db;
-db.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
-db.exec(`
-  CREATE TABLE IF NOT EXISTS roommates (
-    id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE
-  ) STRICT;
-  CREATE TABLE IF NOT EXISTS images (
-    id TEXT PRIMARY KEY, mime_type TEXT NOT NULL, bytes BLOB NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  ) STRICT;
-  CREATE TABLE IF NOT EXISTS receipts (
-    id TEXT PRIMARY KEY, merchant TEXT NOT NULL, purchased_at TEXT NOT NULL,
-    payer_id TEXT NOT NULL REFERENCES roommates(id), subtotal_cents INTEGER NOT NULL,
-    tax_cents INTEGER NOT NULL, adjustment_cents INTEGER NOT NULL, total_cents INTEGER NOT NULL,
-    image_id TEXT REFERENCES images(id), created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-  ) STRICT;
-  CREATE TABLE IF NOT EXISTS receipt_items (
-    id TEXT PRIMARY KEY, receipt_id TEXT NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
-    description TEXT NOT NULL, quantity TEXT, unit_price_cents INTEGER,
-    line_total_cents INTEGER NOT NULL, sort_order INTEGER NOT NULL
-  ) STRICT;
-  CREATE TABLE IF NOT EXISTS item_shares (
-    receipt_item_id TEXT NOT NULL REFERENCES receipt_items(id) ON DELETE CASCADE,
-    roommate_id TEXT NOT NULL REFERENCES roommates(id), allocated_cents INTEGER NOT NULL,
-    PRIMARY KEY (receipt_item_id, roommate_id)
-  ) STRICT;
-  CREATE INDEX IF NOT EXISTS receipts_date ON receipts(purchased_at DESC, created_at DESC);
-  CREATE INDEX IF NOT EXISTS items_receipt ON receipt_items(receipt_id, sort_order);
-`);
-const seed = db.prepare("INSERT OR IGNORE INTO roommates (id, name) VALUES (?, ?)");
-ROOMMATES.forEach(({ id, name }) => seed.run(id, name));
-// Preserve any earlier local data created before the fourth roommate was renamed.
-if (db.prepare("SELECT 1 FROM roommates WHERE id = 'socket'").get()) {
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    db.prepare("INSERT OR IGNORE INTO roommates (id, name) VALUES ('saketh', 'Saketh')").run();
-    db.prepare("UPDATE receipts SET payer_id = 'saketh' WHERE payer_id = 'socket'").run();
-    db.prepare("UPDATE item_shares SET roommate_id = 'saketh' WHERE roommate_id = 'socket'").run();
-    db.prepare("DELETE FROM roommates WHERE id = 'socket'").run();
-    db.exec("COMMIT");
-  } catch (error) { db.exec("ROLLBACK"); throw error; }
+function fail(error: { message: string } | null) { if (error) throw new Error(error.message); }
+function toReceipt(row: ReceiptRow): Receipt {
+  return { id: row.id, merchant: row.merchant, purchasedAt: row.purchased_at, payerId: row.payer_id, subtotalCents: row.subtotal_cents, taxCents: row.tax_cents, adjustmentCents: row.adjustment_cents, totalCents: row.total_cents, imageId: row.image_id, createdAt: row.created_at, updatedAt: row.updated_at,
+    items: (row.receipt_items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item): ReceiptItem => ({ id: item.id, description: item.description, quantity: item.quantity, unitPriceCents: item.unit_price_cents, lineTotalCents: item.line_total_cents, roommateIds: (item.item_shares ?? []).map((share) => share.roommate_id).filter((id): id is RoommateId => ALL_IDS.includes(id)) })) };
 }
+const receiptSelect = "*, receipt_items(*, item_shares(roommate_id, allocated_cents))";
 
-function value<T extends SqlValue>(row: Row, key: string): T { return row[key] as T; }
-function getItems(receiptId: string): ReceiptItem[] {
-  const rows = db.prepare(`
-    SELECT i.*, GROUP_CONCAT(s.roommate_id) AS roommate_ids
-    FROM receipt_items i LEFT JOIN item_shares s ON s.receipt_item_id = i.id
-    WHERE i.receipt_id = ? GROUP BY i.id ORDER BY i.sort_order
-  `).all(receiptId) as Row[];
-  return rows.map((row) => ({
-    id: value<string>(row, "id"), description: value<string>(row, "description"),
-    quantity: value<string | null>(row, "quantity"), unitPriceCents: value<number | null>(row, "unit_price_cents"),
-    lineTotalCents: value<number>(row, "line_total_cents"),
-    roommateIds: String(row.roommate_ids ?? "").split(",").filter((id): id is RoommateId => ALL_IDS.includes(id as RoommateId)),
-  }));
+export async function getReceipt(supabase: SupabaseClient, id: string): Promise<Receipt | null> {
+  const { data, error } = await supabase.from("receipts").select(receiptSelect).eq("id", id).maybeSingle(); fail(error);
+  return data ? toReceipt(data as unknown as ReceiptRow) : null;
 }
-function toReceipt(row: Row): Receipt {
-  return {
-    id: value<string>(row, "id"), merchant: value<string>(row, "merchant"), purchasedAt: value<string>(row, "purchased_at"),
-    payerId: value<RoommateId>(row, "payer_id"), subtotalCents: value<number>(row, "subtotal_cents"), taxCents: value<number>(row, "tax_cents"),
-    adjustmentCents: value<number>(row, "adjustment_cents"), totalCents: value<number>(row, "total_cents"), imageId: value<string | null>(row, "image_id"),
-    createdAt: value<string>(row, "created_at"), updatedAt: value<string>(row, "updated_at"), items: getItems(value<string>(row, "id")),
-  };
+export async function getReceipts(supabase: SupabaseClient): Promise<Receipt[]> {
+  const { data, error } = await supabase.from("receipts").select(receiptSelect).order("purchased_at", { ascending: false }).order("created_at", { ascending: false }); fail(error);
+  return (data as unknown as ReceiptRow[]).map(toReceipt);
 }
-export function getReceipt(id: string): Receipt | null {
-  const row = db.prepare("SELECT * FROM receipts WHERE id = ?").get(id) as Row | undefined;
-  return row ? toReceipt(row) : null;
-}
-export function getReceipts(): Receipt[] {
-  return (db.prepare("SELECT * FROM receipts ORDER BY purchased_at DESC, created_at DESC").all() as Row[]).map(toReceipt);
-}
-export function getHomeData() {
-  const receipts = getReceipts();
+export async function getHomeData(supabase: SupabaseClient) {
+  const receipts = await getReceipts(supabase);
   const trips: TripSummary[] = receipts.map(({ items, ...receipt }) => ({ ...receipt, itemCount: items.length }));
   return { trips, balances: calculateBalances(receipts) };
 }
-
-function transaction<T>(fn: () => T): T {
-  db.exec("BEGIN IMMEDIATE");
-  try { const result = fn(); db.exec("COMMIT"); return result; }
-  catch (error) { db.exec("ROLLBACK"); throw error; }
-}
-function writeItems(receipt: ReceiptInput) {
+function payload(receipt: ReceiptInput) {
   const allocation = allocateReceipt(receipt);
-  const itemStmt = db.prepare("INSERT INTO receipt_items VALUES (?, ?, ?, ?, ?, ?, ?)");
-  const shareStmt = db.prepare("INSERT INTO item_shares VALUES (?, ?, ?)");
-  receipt.items.forEach((item, index) => {
-    itemStmt.run(item.id, receipt.id, item.description, item.quantity, item.unitPriceCents, item.lineTotalCents, index);
-    allocation.items[index].shares.forEach((share) => shareStmt.run(item.id, share.roommateId, share.allocatedCents));
-  });
+  return { ...receipt, items: receipt.items.map((item, index) => ({ ...item, shares: allocation.items[index].shares.map((share) => ({ roommateId: share.roommateId, allocatedCents: share.allocatedCents })) })) };
 }
-export function createReceipt(receipt: ReceiptInput): Receipt {
-  allocateReceipt(receipt);
-  return transaction(() => {
-    const existing = getReceipt(receipt.id);
-    if (existing) return existing;
-    if (receipt.imageId && !getImage(receipt.imageId)) throw new Error("The receipt image is no longer available.");
-    const now = new Date().toISOString();
-    db.prepare(`INSERT INTO receipts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(receipt.id, receipt.merchant, receipt.purchasedAt, receipt.payerId, receipt.subtotalCents, receipt.taxCents, receipt.adjustmentCents, receipt.totalCents, receipt.imageId, now, now);
-    writeItems(receipt);
-    return getReceipt(receipt.id)!;
-  });
+async function saveReceipt(supabase: SupabaseClient, receipt: ReceiptInput, expectedUpdatedAt: string | null) {
+  const { error } = await supabase.rpc("save_receipt", { p_receipt: payload(receipt), p_expected_updated_at: expectedUpdatedAt }); fail(error);
+  const saved = await getReceipt(supabase, receipt.id); if (!saved) throw new Error("Receipt not found after saving."); return saved;
 }
-export function updateReceipt(id: string, receipt: ReceiptInput, expectedUpdatedAt: string): Receipt {
-  if (id !== receipt.id) throw new Error("Receipt ID mismatch.");
-  allocateReceipt(receipt);
-  return transaction(() => {
-    const previous = getReceipt(id);
-    if (!previous) throw new Error("Receipt not found.");
-    if (previous.updatedAt !== expectedUpdatedAt) throw new Error("This receipt changed elsewhere. Reload and try again.");
-    const now = new Date(Math.max(Date.now(), Date.parse(previous.updatedAt) + 1)).toISOString();
-    const result = db.prepare(`UPDATE receipts SET merchant=?, purchased_at=?, payer_id=?, subtotal_cents=?, tax_cents=?, adjustment_cents=?, total_cents=?, image_id=?, updated_at=? WHERE id=? AND updated_at=?`)
-      .run(receipt.merchant, receipt.purchasedAt, receipt.payerId, receipt.subtotalCents, receipt.taxCents, receipt.adjustmentCents, receipt.totalCents, receipt.imageId, now, id, expectedUpdatedAt);
-    if (Number(result.changes) !== 1) throw new Error("This receipt changed elsewhere. Reload and try again.");
-    db.prepare("DELETE FROM receipt_items WHERE receipt_id = ?").run(id);
-    writeItems(receipt);
-    return getReceipt(id)!;
-  });
+export function createReceipt(supabase: SupabaseClient, receipt: ReceiptInput) { return saveReceipt(supabase, receipt, null); }
+export async function updateReceipt(supabase: SupabaseClient, id: string, receipt: ReceiptInput, expectedUpdatedAt: string) { if (id !== receipt.id) throw new Error("Receipt ID mismatch."); return saveReceipt(supabase, receipt, expectedUpdatedAt); }
+export async function deleteReceipt(supabase: SupabaseClient, id: string, expectedUpdatedAt: string) {
+  const { data: objectPath, error } = await supabase.rpc("delete_receipt", { p_id: id, p_expected_updated_at: expectedUpdatedAt }); fail(error);
+  if (objectPath) { const { error: storageError } = await supabase.storage.from("receipt-images").remove([objectPath]); fail(storageError); const { error: metadataError } = await supabase.from("receipt_images").delete().eq("object_path", objectPath); fail(metadataError); }
 }
-export function deleteReceipt(id: string, expectedUpdatedAt: string) {
-  return transaction(() => {
-    const previous = getReceipt(id);
-    if (!previous) throw new Error("Receipt not found.");
-    if (previous.updatedAt !== expectedUpdatedAt) throw new Error("This receipt changed elsewhere. Reload and try again.");
-    db.prepare("DELETE FROM receipts WHERE id = ?").run(id);
-    if (previous.imageId) db.prepare("DELETE FROM images WHERE id = ?").run(previous.imageId);
-  });
+export async function saveImage(supabase: SupabaseClient, id: string, mime: string, bytes: Uint8Array) {
+  const objectPath = `receipts/${id}`;
+  const uploadBytes = new Uint8Array(bytes);
+  const { error: uploadError } = await supabase.storage.from("receipt-images").upload(objectPath, new Blob([uploadBytes.buffer], { type: mime }), { contentType: mime, upsert: false }); fail(uploadError);
+  const { error: metadataError } = await supabase.from("receipt_images").insert({ id, object_path: objectPath, mime_type: mime });
+  if (metadataError) { await supabase.storage.from("receipt-images").remove([objectPath]); fail(metadataError); }
+  return { id, objectPath, mime } satisfies StoredImage;
 }
-export function saveImage(id: string, mime: string, bytes: Uint8Array) {
-  db.prepare("DELETE FROM images WHERE created_at < datetime('now', '-1 day') AND id NOT IN (SELECT image_id FROM receipts WHERE image_id IS NOT NULL)").run();
-  db.prepare("INSERT INTO images (id, mime_type, bytes) VALUES (?, ?, ?)").run(id, mime, bytes);
+export async function getImage(supabase: SupabaseClient, id: string): Promise<{ mime: string; bytes: Uint8Array } | null> {
+  const { data, error } = await supabase.from("receipt_images").select("object_path, mime_type").eq("id", id).maybeSingle(); fail(error); if (!data) return null;
+  const { data: blob, error: downloadError } = await supabase.storage.from("receipt-images").download(data.object_path); fail(downloadError); if (!blob) throw new Error("The receipt image is no longer available.");
+  return { mime: data.mime_type, bytes: new Uint8Array(await blob.arrayBuffer()) };
 }
-export function getImage(id: string): { mime: string; bytes: Uint8Array } | null {
-  const row = db.prepare("SELECT mime_type, bytes FROM images WHERE id = ?").get(id) as Row | undefined;
-  return row ? { mime: value<string>(row, "mime_type"), bytes: value<Uint8Array>(row, "bytes") } : null;
+export async function getImageUrl(supabase: SupabaseClient, id: string) {
+  const { data, error } = await supabase.from("receipt_images").select("object_path").eq("id", id).maybeSingle(); fail(error); if (!data) return null;
+  const { data: signed, error: signedError } = await supabase.storage.from("receipt-images").createSignedUrl(data.object_path, 60); fail(signedError); if (!signed) throw new Error("Could not create an image link."); return signed.signedUrl;
 }

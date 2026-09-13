@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+test.skip(!process.env.NEXT_PUBLIC_SUPABASE_URL, "E2E tests need a configured Supabase project and a signed-in test member.");
+
 async function cleanupTestTrips(page: import("@playwright/test").Page) {
   const testTrips = page.locator(".trip").filter({ hasText: /Test Market|Image Test/ });
   while (await testTrips.count()) {
