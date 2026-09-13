@@ -42,6 +42,17 @@ db.exec(`
 `);
 const seed = db.prepare("INSERT OR IGNORE INTO roommates (id, name) VALUES (?, ?)");
 ROOMMATES.forEach(({ id, name }) => seed.run(id, name));
+// Preserve any earlier local data created before the fourth roommate was renamed.
+if (db.prepare("SELECT 1 FROM roommates WHERE id = 'socket'").get()) {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("INSERT OR IGNORE INTO roommates (id, name) VALUES ('saketh', 'Saketh')").run();
+    db.prepare("UPDATE receipts SET payer_id = 'saketh' WHERE payer_id = 'socket'").run();
+    db.prepare("UPDATE item_shares SET roommate_id = 'saketh' WHERE roommate_id = 'socket'").run();
+    db.prepare("DELETE FROM roommates WHERE id = 'socket'").run();
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
 
 function value<T extends SqlValue>(row: Row, key: string): T { return row[key] as T; }
 function getItems(receiptId: string): ReceiptItem[] {

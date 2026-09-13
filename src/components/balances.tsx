@@ -11,8 +11,8 @@ export function Balances({ balances }: { balances: PairBalance[] }) {
     <div className="pair-table" aria-label="Pairwise balances">
       <div className="corner" />{ALL_IDS.slice(1).map((id) => <div className="colhead" key={id}>{nameOf(id)}</div>)}
       <div className="rowhead">Michael</div>{ALL_IDS.slice(1).map((id) => <Pair key={id} balance={get("michael", id)} />)}
-      <div className="rowhead">Kevin</div><div className="blank" aria-hidden="true" /><Pair balance={get("kevin", "feo")} /><Pair balance={get("kevin", "socket")} />
-      <div className="rowhead">Feo</div><div className="blank" aria-hidden="true" /><div className="blank" aria-hidden="true" /><Pair balance={get("feo", "socket")} />
+      <div className="rowhead">Kevin</div><div className="blank" aria-hidden="true" /><Pair balance={get("kevin", "feo")} /><Pair balance={get("kevin", "saketh")} />
+      <div className="rowhead">Feo</div><div className="blank" aria-hidden="true" /><div className="blank" aria-hidden="true" /><Pair balance={get("feo", "saketh")} />
     </div>
     <div className="mobile-pairs" aria-label="Pairwise balances">
       {balances.map((p) => <div className="mobile-pair" key={`${p.first}-${p.second}`}>

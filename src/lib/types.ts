@@ -2,7 +2,7 @@ export const ROOMMATES = [
   { id: "michael", name: "Michael" },
   { id: "kevin", name: "Kevin" },
   { id: "feo", name: "Feo" },
-  { id: "socket", name: "Socket" },
+  { id: "saketh", name: "Saketh" },
 ] as const;
 export type RoommateId = (typeof ROOMMATES)[number]["id"];
 export const ALL_IDS: RoommateId[] = ROOMMATES.map((r) => r.id);

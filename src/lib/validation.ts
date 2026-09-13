@@ -10,7 +10,7 @@ export const receiptSchema = z.object({
   id: z.uuid(),
   merchant: z.string().trim().min(1, "Enter the store name.").max(200),
   purchasedAt: dateSchema,
-  payerId: z.enum(ALL_IDS as ["michael", "kevin", "feo", "socket"]),
+  payerId: z.enum(ALL_IDS as ["michael", "kevin", "feo", "saketh"]),
   subtotalCents: centsSchema,
   taxCents: centsSchema,
   adjustmentCents: centsSchema,
@@ -22,7 +22,7 @@ export const receiptSchema = z.object({
     quantity: z.string().trim().max(40).nullable(),
     unitPriceCents: centsSchema.nullable(),
     lineTotalCents: centsSchema,
-    roommateIds: z.array(z.enum(ALL_IDS as ["michael", "kevin", "feo", "socket"])).min(1, "Assign every item.").max(4).refine((ids) => new Set(ids).size === ids.length),
+    roommateIds: z.array(z.enum(ALL_IDS as ["michael", "kevin", "feo", "saketh"])).min(1, "Assign every item.").max(4).refine((ids) => new Set(ids).size === ids.length),
   })).min(1, "Add at least one item.").max(300),
 }).strict().superRefine((receipt, ctx) => {
   if (new Set(receipt.items.map((i) => i.id)).size !== receipt.items.length) ctx.addIssue({ code: "custom", message: "Item IDs must be unique." });
