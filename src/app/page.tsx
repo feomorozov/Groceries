@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { unstable_noStore as noStore } from "next/cache";
 import { Balances } from "@/components/balances";
-import { SiteHeader } from "@/components/site-header";
 import { getHomeData } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -13,7 +12,6 @@ export default async function Home() {
   noStore();
   const { trips, balances } = await getHomeData(createSupabaseServerClient());
   return <main className="shell">
-    <SiteHeader />
     <div className="pagehead"><h1>Groceries</h1><Link href="/receipts/new" className="primary">Add receipt</Link></div>
     <section className="section" aria-labelledby="balances-heading"><div className="sectionhead"><h2 id="balances-heading">Balances</h2><p className="tiny">All trips, netted by pair</p></div><Balances balances={balances} /></section>
     <section className="section" aria-labelledby="trips-heading"><div className="sectionhead"><h2 id="trips-heading">Recent trips</h2>{trips.length > 0 && <p className="tiny">{trips.length} {trips.length === 1 ? "receipt" : "receipts"}</p>}</div>

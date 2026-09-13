@@ -59,7 +59,7 @@ test("responsive balance views switch at the mobile breakpoint", async ({ page }
 test("receipt image persists and extraction failure keeps manual entry available", async ({ page }) => {
   await page.goto("/"); await cleanupTestTrips(page); await page.goto("/receipts/new");
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
-  await page.locator('input[type="file"]').setInputFiles({ name: "receipt.png", mimeType: "image/png", buffer: png });
+  await page.locator('input[type="file"]').first().setInputFiles({ name: "receipt.png", mimeType: "image/png", buffer: png });
   await expect(page.getByAltText("Selected receipt preview")).toBeVisible();
   await page.getByLabel("Michael").check();
   await page.getByRole("button", { name: "Read receipt" }).click();
