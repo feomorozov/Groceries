@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { allocateReceipt, calculateBalances } from "./money";
 import { ALL_IDS, type BalancePayment, type Receipt, type ReceiptInput, type ReceiptItem, type RoommateId, type TripSummary } from "./types";
 
-type ReceiptRow = { id: string; merchant: string; purchased_at: string; payer_id: RoommateId; subtotal_cents: number; tax_cents: number; adjustment_cents: number; total_cents: number; image_id: string | null; created_at: string; updated_at: string; receipt_items?: ItemRow[] };
+type ReceiptRow = { id: string; is_complete?: boolean; merchant: string; purchased_at: string; payer_id: RoommateId; subtotal_cents: number; tax_cents: number; adjustment_cents: number; total_cents: number; image_id: string | null; created_at: string; updated_at: string; receipt_items?: ItemRow[] };
 type ItemRow = { id: string; sku: string | null; raw_description: string | null; description: string; quantity: string | null; unit_price_cents: number | null; item_discount_cents: number | null; line_total_cents: number; is_uncertain: boolean | null; sort_order: number; item_shares?: ShareRow[] };
 type ShareRow = { roommate_id: RoommateId; allocated_cents: number };
 type PaymentRow = { id: string; payer_id: RoommateId; recipient_id: RoommateId; amount_cents: number; created_at: string };
@@ -12,7 +12,7 @@ type DatabaseError = { message: string; code?: string };
 function fail(error: DatabaseError | null) { if (error) throw new Error(error.message); }
 function isMissingPaymentsTable(error: DatabaseError | null) { return error?.code === "42P01" || (error?.code === "PGRST205" && error.message.includes("balance_payments")); }
 function toReceipt(row: ReceiptRow): Receipt {
-  return { id: row.id, merchant: row.merchant, purchasedAt: row.purchased_at, payerId: row.payer_id, subtotalCents: row.subtotal_cents, taxCents: row.tax_cents, adjustmentCents: row.adjustment_cents, totalCents: row.total_cents, imageId: row.image_id, createdAt: row.created_at, updatedAt: row.updated_at,
+  return { id: row.id, isComplete: row.is_complete ?? true, merchant: row.merchant, purchasedAt: row.purchased_at, payerId: row.payer_id, subtotalCents: row.subtotal_cents, taxCents: row.tax_cents, adjustmentCents: row.adjustment_cents, totalCents: row.total_cents, imageId: row.image_id, createdAt: row.created_at, updatedAt: row.updated_at,
     items: (row.receipt_items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item): ReceiptItem => ({ id: item.id, sku: item.sku ?? null, rawDescription: item.raw_description ?? null, description: item.description, quantity: item.quantity, unitPriceCents: item.unit_price_cents, itemDiscountCents: item.item_discount_cents ?? null, lineTotalCents: item.line_total_cents, isUncertain: item.is_uncertain ?? false, roommateIds: (item.item_shares ?? []).map((share) => share.roommate_id).filter((id): id is RoommateId => ALL_IDS.includes(id)) })) };
 }
 function toPayment(row: PaymentRow): BalancePayment { return { id: row.id, payerId: row.payer_id, recipientId: row.recipient_id, cents: row.amount_cents, createdAt: row.created_at }; }
@@ -38,6 +38,7 @@ export async function getHomeData(supabase: SupabaseClient) {
   return { trips, payments, balances: calculateBalances(receipts, payments) };
 }
 function payload(receipt: ReceiptInput) {
+  if (!receipt.isComplete) return { ...receipt, items: receipt.items.map((item) => ({ ...item, shares: [] })) };
   const allocation = allocateReceipt(receipt);
   return { ...receipt, items: receipt.items.map((item, index) => ({ ...item, shares: allocation.items[index].shares.map((share) => ({ roommateId: share.roommateId, allocatedCents: share.allocatedCents })) })) };
 }

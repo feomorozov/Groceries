@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { allocateReceipt, allocateWeighted, calculateBalances } from "../src/lib/money";
 import type { ReceiptInput, RoommateId } from "../src/lib/types";
+import { receiptSchema } from "../src/lib/validation";
 
 const ids = ["michael", "kevin", "feo", "saketh"] as RoommateId[];
 function receipt(id: string, payerId: RoommateId, itemData: Array<[number, RoommateId[]]>, extras: Partial<ReceiptInput> = {}): ReceiptInput {
   const sum = itemData.reduce((n,[c]) => n+c,0);
-  return { id, merchant:"Store", purchasedAt:"2026-09-12", payerId, subtotalCents:sum, taxCents:0, adjustmentCents:0, totalCents:sum, imageId:null,
+  return { id, isComplete:true, merchant:"Store", purchasedAt:"2026-09-12", payerId, subtotalCents:sum, taxCents:0, adjustmentCents:0, totalCents:sum, imageId:null,
     items:itemData.map(([lineTotalCents,roommateIds],i)=>({id:`00000000-0000-4000-8000-${String(i+1).padStart(12,"0")}`,sku:null,rawDescription:null,description:`Item ${i}`,quantity:null,unitPriceCents:null,itemDiscountCents:null,lineTotalCents,isUncertain:false,roommateIds})), ...extras };
 }
 test("single person owns the full item", () => assert.deepEqual(allocateReceipt(receipt("a","michael",[[1200,["feo"]]])).portions, {michael:0,kevin:0,feo:1200,saketh:0}));
@@ -21,6 +22,12 @@ test("tax and adjustment are allocated by positive item value", () => { const r=
 test("allocations always reconcile with discounts and negative lines", () => { const r=receipt("a","michael",[[1000,["michael","kevin","feo"]],[-100,["michael","kevin","feo"]]],{taxCents:73,adjustmentCents:-23,totalCents:950}); const a=allocateReceipt(r); assert.equal(Object.values(a.portions).reduce((n,c)=>n+c,0),950); });
 test("editing a receipt changes derived balances", () => { const old=calculateBalances([receipt("a","michael",[[1000,["kevin"]]])])[0]; const edited=calculateBalances([receipt("a","michael",[[400,["kevin"]]])])[0]; assert.equal(old.cents,1000); assert.equal(edited.cents,400); });
 test("deleting a receipt removes it from derived balances", () => { const before=calculateBalances([receipt("a","michael",[[1000,["kevin"]]])])[0]; const after=calculateBalances([])[0]; assert.equal(before.cents,1000); assert.equal(after.cents,0); });
+test("incomplete receipts do not affect balances", () => { const balance=calculateBalances([receipt("a","michael",[[1000,[]]],{isComplete:false})])[0]; assert.equal(balance.cents,0); });
+test("incomplete receipts can be saved before names and shares are finished", () => {
+  const draft = receipt("00000000-0000-4000-8000-000000000099", "michael", [[1000, []]], { isComplete:false, merchant:"", items:[{ id:"00000000-0000-4000-8000-000000000001", sku:null, rawDescription:null, description:"", quantity:null, unitPriceCents:null, itemDiscountCents:null, lineTotalCents:1000, isUncertain:false, roommateIds:[] }] });
+  assert.equal(receiptSchema.parse(draft).isComplete, false);
+  assert.throws(() => receiptSchema.parse({ ...draft, isComplete:true }));
+});
 test("recorded payments reduce a pair's outstanding balance", () => {
   const payments = [{ id:"00000000-0000-4000-8000-000000000010", payerId:"kevin" as RoommateId, recipientId:"michael" as RoommateId, cents:400, createdAt:"2026-09-13T12:00:00.000Z" }];
   const balance = calculateBalances([receipt("a","michael",[[1000,["kevin"]]])], payments).find((value) => value.first === "michael" && value.second === "kevin");

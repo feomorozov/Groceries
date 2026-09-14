@@ -64,6 +64,7 @@ export function allocateReceipt(receipt: ReceiptInput) {
 export function calculateBalances(receipts: ReceiptInput[], payments: BalancePayment[] = []): PairBalance[] {
   const debts = Object.fromEntries(ALL_IDS.map((id) => [id, Object.fromEntries(ALL_IDS.map((other) => [other, 0]))])) as Record<RoommateId, Record<RoommateId, number>>;
   for (const receipt of receipts) {
+    if (!receipt.isComplete) continue;
     const { portions } = allocateReceipt(receipt);
     for (const id of ALL_IDS) if (id !== receipt.payerId) debts[id][receipt.payerId] += portions[id];
   }

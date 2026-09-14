@@ -19,7 +19,7 @@ async function shrinkImage(file: File): Promise<File> {
   } catch { return file; }
 }
 function makeManual(payerId: RoommateId, imageId: string | null): ReceiptInput {
-  return { id: crypto.randomUUID(), merchant: "", purchasedAt: today(), payerId, subtotalCents: 0, taxCents: 0, adjustmentCents: 0, totalCents: 0, imageId,
+  return { id: crypto.randomUUID(), isComplete: false, merchant: "", purchasedAt: today(), payerId, subtotalCents: 0, taxCents: 0, adjustmentCents: 0, totalCents: 0, imageId,
     items: [{ id: crypto.randomUUID(), sku: null, rawDescription: null, description: "", quantity: null, unitPriceCents: null, itemDiscountCents: null, lineTotalCents: 0, isUncertain: false, roommateIds: [] }] };
 }
 function fromExtraction(data: ExtractedReceipt, payerId: RoommateId, imageId: string): ReceiptInput {
@@ -29,7 +29,7 @@ function fromExtraction(data: ExtractedReceipt, payerId: RoommateId, imageId: st
   const subtotal = data.subtotalCents ?? itemSum;
   const adjustment = (data.discountCents ?? 0) + (data.feeCents ?? 0);
   const tax = data.taxCents ?? 0;
-  return { id: crypto.randomUUID(), merchant: data.merchant ?? "", purchasedAt: data.purchasedAt ?? today(), payerId, subtotalCents: subtotal, taxCents: tax, adjustmentCents: adjustment, totalCents: data.totalCents ?? subtotal + tax + adjustment, imageId, items };
+  return { id: crypto.randomUUID(), isComplete: false, merchant: data.merchant ?? "", purchasedAt: data.purchasedAt ?? today(), payerId, subtotalCents: subtotal, taxCents: tax, adjustmentCents: adjustment, totalCents: data.totalCents ?? subtotal + tax + adjustment, imageId, items };
 }
 
 type ReceiptDiagnostics = Record<string, unknown>;

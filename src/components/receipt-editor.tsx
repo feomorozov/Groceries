@@ -7,6 +7,10 @@ import { ALL_IDS, ROOMMATES, nameOf, type Receipt, type ReceiptInput, type Roomm
 
 const newItem = () => ({ id: crypto.randomUUID(), sku: null, rawDescription: null, description: "", quantity: null, unitPriceCents: null, itemDiscountCents: null, lineTotalCents: 0, isUncertain: false, roommateIds: [] });
 function errorMessage(body: unknown) { return typeof body === "object" && body && "error" in body ? String(body.error) : "Something went wrong."; }
+function canComplete(receipt: ReceiptInput) {
+  if (!receipt.merchant.trim() || !receipt.items.length || receipt.items.some((item) => !item.description.trim())) return false;
+  try { allocateReceipt(receipt); return true; } catch { return false; }
+}
 function SplitPicker({ selected, onChange }: { selected: RoommateId[]; onChange: (ids: RoommateId[]) => void }) {
   const root = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -45,19 +49,19 @@ export function ReceiptEditor({ initial, warnings = [] }: { initial: ReceiptInpu
   const itemSum = useMemo(() => receipt.items.reduce((n, item) => n + item.lineTotalCents, 0), [receipt.items]);
   const computedTotal = itemSum + receipt.taxCents + receipt.adjustmentCents;
   const difference = receipt.totalCents - computedTotal;
+  const complete = canComplete(receipt);
   const update = <K extends keyof ReceiptInput>(key: K, value: ReceiptInput[K]) => setReceipt((r) => ({ ...r, [key]: value }));
   const updateItem = (id: string, patch: Partial<ReceiptInput["items"][number]>) => update("items", receipt.items.map((item) => item.id === id ? { ...item, ...patch } : item));
   const reconcile = () => setReceipt((r) => ({ ...r, subtotalCents: itemSum, adjustmentCents: r.totalCents - itemSum - r.taxCents }));
   const save = async () => {
     setError("");
-    try { allocateReceipt(receipt); }
-    catch (e) { setError(e instanceof Error ? e.message : "Check the receipt."); return; }
+    const receiptToSave = { ...receipt, isComplete: complete };
     setSaving(true);
     try {
-      const response = await fetch(isExisting ? `/api/receipts/${receipt.id}` : "/api/receipts", { method: isExisting ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(isExisting ? { receipt, expectedUpdatedAt: version } : receipt) });
+      const response = await fetch(isExisting ? `/api/receipts/${receipt.id}` : "/api/receipts", { method: isExisting ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(isExisting ? { receipt: receiptToSave, expectedUpdatedAt: version } : receiptToSave) });
       const body = await response.json();
       if (!response.ok) throw new Error(errorMessage(body));
-      if (isExisting) { setVersion(body.updatedAt); setSaving(false); router.refresh(); }
+      if (isExisting) { setReceipt(receiptToSave); setVersion(body.updatedAt); setSaving(false); router.refresh(); }
       else { router.push(`/receipts/${receipt.id}`); router.refresh(); }
     } catch (e) { setError(e instanceof Error ? e.message : "Couldn't save this receipt."); setSaving(false); }
   };
@@ -72,6 +76,7 @@ export function ReceiptEditor({ initial, warnings = [] }: { initial: ReceiptInpu
   };
   return <>
     {warnings.length > 0 && <div className="notice" role="status">{warnings.join(" ")}</div>}
+    {!complete && <div className="incomplete-notice" role="status">This receipt is incomplete. You can save it now and finish the details later; it will not affect balances until it is complete.</div>}
     <div className="editor-head">
       <div className="field merchant"><label htmlFor="merchant">Store</label><input id="merchant" className="input big" value={receipt.merchant} onChange={(e) => update("merchant", e.target.value)} /></div>
       <div className="field"><label htmlFor="date">Date</label><input id="date" className="input" type="date" value={receipt.purchasedAt} onChange={(e) => update("purchasedAt", e.target.value)} /></div>
@@ -98,7 +103,7 @@ export function ReceiptEditor({ initial, warnings = [] }: { initial: ReceiptInpu
     </div>
     {/* Private database images are served directly and keep their natural aspect ratio. */}
     {receipt.imageId && <details className="receipt-image"><summary>View original receipt</summary><img src={`/api/images/${receipt.imageId}`} alt="Uploaded receipt" /></details>}
-    <div className="editor-actions">{error && <span role="alert" className="error">{error}</span>}<button type="button" className="primary" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save receipt"}</button></div>
+    <div className="editor-actions">{error && <span role="alert" className="error">{error}</span>}<button type="button" className="primary" disabled={saving} onClick={save}>{saving ? "Saving…" : complete ? "Save receipt" : "Save incomplete receipt"}</button></div>
     {isExisting && <div className="delete-area"><button type="button" className="text-btn danger" onClick={() => dialog.current?.showModal()}>Delete receipt</button></div>}
     <dialog ref={dialog} aria-labelledby="delete-title"><h2 id="delete-title">Delete this receipt?</h2><p className="muted">Its shares will be removed from everyone’s balances.</p><div className="dialog-actions"><button className="secondary-btn" onClick={() => dialog.current?.close()}>Cancel</button><button className="primary" disabled={saving} onClick={remove}>Delete receipt</button></div></dialog>
   </>;

@@ -26,6 +26,8 @@ export type ReceiptItem = {
 };
 export type ReceiptInput = {
   id: string;
+  /** Incomplete receipts are saved for later and do not affect balances. */
+  isComplete: boolean;
   merchant: string;
   purchasedAt: string;
   payerId: RoommateId;
