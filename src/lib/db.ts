@@ -35,7 +35,7 @@ export async function getPayments(supabase: SupabaseClient): Promise<BalancePaym
 export async function getHomeData(supabase: SupabaseClient) {
   const [receipts, payments] = await Promise.all([getReceipts(supabase), getPayments(supabase)]);
   const trips: TripSummary[] = receipts.map(({ items, ...receipt }) => ({ ...receipt, itemCount: items.length }));
-  return { trips, payments, balances: calculateBalances(receipts, payments) };
+  return { receipts, trips, payments, balances: calculateBalances(receipts, payments) };
 }
 function payload(receipt: ReceiptInput) {
   if (!receipt.isComplete) return { ...receipt, items: receipt.items.map((item) => ({ ...item, shares: [] })) };

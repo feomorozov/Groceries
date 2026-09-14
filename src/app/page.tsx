@@ -11,10 +11,10 @@ function displayTimestamp(value: string) { return new Intl.DateTimeFormat("en-US
 export const dynamic = "force-dynamic";
 export default async function Home() {
   noStore();
-  const { trips, payments, balances } = await getHomeData(createSupabaseServerClient());
+  const { receipts, trips, payments, balances } = await getHomeData(createSupabaseServerClient());
   return <main className="shell">
     <div className="pagehead"><h1>Groceries</h1><Link href="/receipts/new" className="primary">Add receipt</Link></div>
-    <section className="section" aria-labelledby="balances-heading"><div className="sectionhead"><h2 id="balances-heading">Balances</h2><p className="tiny">All trips, netted by pair</p></div><Balances balances={balances} payments={payments} /></section>
+    <section className="section" aria-labelledby="balances-heading"><div className="sectionhead"><h2 id="balances-heading">Balances</h2><p className="tiny">All trips, netted by pair</p></div><Balances balances={balances} payments={payments} receipts={receipts} /></section>
     <section className="section" aria-labelledby="history-heading"><div className="sectionhead"><h2 id="history-heading">Transaction History</h2>{payments.length > 0 && <p className="tiny">{payments.length} {payments.length === 1 ? "payment" : "payments"}</p>}</div>
       {payments.length === 0 ? <div className="empty">No balance payments have been recorded.</div> : <div className="transaction-list">{payments.map((payment) => <div className="transaction" key={payment.id}><span className="transaction-title">{nameOf(payment.payerId)} paid {nameOf(payment.recipientId)}</span><span className="transaction-meta">{displayTimestamp(payment.createdAt)}</span><span className="transaction-amount">{formatMoney(payment.cents)}</span></div>)}</div>}
     </section>
