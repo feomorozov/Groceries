@@ -16,7 +16,8 @@ All Supabase calls happen on the server. `SUPABASE_SECRET_KEY` and `OPENAI_API_K
 4. Run [`supabase/migrations/0003_receipt_item_metadata.sql`](supabase/migrations/0003_receipt_item_metadata.sql). It adds the printed SKU/raw text, line discount, and uncertainty fields used by receipt reading.
 5. Run [`supabase/migrations/0004_balance_payments.sql`](supabase/migrations/0004_balance_payments.sql). It adds the payment history used to settle balances.
 6. Run [`supabase/migrations/0005_incomplete_receipts.sql`](supabase/migrations/0005_incomplete_receipts.sql). It lets parsed receipts be saved before item assignments are finished.
-7. Open **Project Settings → API**. Copy the Project URL and a **secret key**. Do not use the publishable key. The secret key is for the Next.js server only.
+7. Run [`supabase/migrations/0006_todo_items.sql`](supabase/migrations/0006_todo_items.sql). It adds the shared grocery checklists.
+8. Open **Project Settings → API**. Copy the Project URL and a **secret key**. Do not use the publishable key. The secret key is for the Next.js server only.
 
 The migration keeps the Supabase tables and Storage bucket private. The Vercel server uses the secret key; browsers never contact Supabase directly.
 

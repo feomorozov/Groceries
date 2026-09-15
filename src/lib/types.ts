@@ -54,3 +54,11 @@ export type BalancePayment = {
   cents: number;
   createdAt: string;
 };
+export type TodoItem = {
+  id: string;
+  roommateId: RoommateId;
+  text: string;
+  completed: boolean;
+  createdAt: string;
+  updatedAt: string;
+};

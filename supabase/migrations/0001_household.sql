@@ -4,10 +4,12 @@ create table if not exists public.app_members (user_id uuid primary key referenc
 create table if not exists public.receipt_images (id uuid primary key, object_path text not null unique, mime_type text not null check (mime_type in ('image/jpeg', 'image/png', 'image/webp')), created_at timestamptz not null default now());
 create table if not exists public.receipts (id uuid primary key, is_complete boolean not null default true, merchant text not null, purchased_at date not null, payer_id text not null references public.roommates(id), subtotal_cents integer not null, tax_cents integer not null, adjustment_cents integer not null, total_cents integer not null, image_id uuid references public.receipt_images(id), created_at timestamptz not null default now(), updated_at timestamptz not null default now());
 create table if not exists public.balance_payments (id uuid primary key, payer_id text not null references public.roommates(id), recipient_id text not null references public.roommates(id), amount_cents integer not null check (amount_cents > 0), created_at timestamptz not null default now(), check (payer_id <> recipient_id));
+create table if not exists public.todo_items (id uuid primary key, roommate_id text not null references public.roommates(id), text text not null check (char_length(btrim(text)) between 1 and 300), completed boolean not null default false, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
 create table if not exists public.receipt_items (id uuid primary key, receipt_id uuid not null references public.receipts(id) on delete cascade, sku text, raw_description text, description text not null, quantity text, unit_price_cents integer, item_discount_cents integer, line_total_cents integer not null, is_uncertain boolean not null default false, sort_order integer not null);
 create table if not exists public.item_shares (receipt_item_id uuid not null references public.receipt_items(id) on delete cascade, roommate_id text not null references public.roommates(id), allocated_cents integer not null, primary key (receipt_item_id, roommate_id));
 create index if not exists receipts_date on public.receipts (purchased_at desc, created_at desc);
 create index if not exists balance_payments_created_at on public.balance_payments (created_at desc);
+create index if not exists todo_items_roommate on public.todo_items (roommate_id, completed, created_at);
 create index if not exists items_receipt on public.receipt_items (receipt_id, sort_order);
 
 create or replace function public.is_app_member() returns boolean language sql stable security definer set search_path = public as $$ select auth.role() = 'service_role' or exists (select 1 from public.app_members where user_id = auth.uid()); $$;
@@ -16,6 +18,7 @@ alter table public.app_members enable row level security;
 alter table public.receipt_images enable row level security;
 alter table public.receipts enable row level security;
 alter table public.balance_payments enable row level security;
+alter table public.todo_items enable row level security;
 alter table public.receipt_items enable row level security;
 alter table public.item_shares enable row level security;
 create policy "members can read roommates" on public.roommates for select to authenticated using (public.is_app_member());
@@ -23,6 +26,7 @@ create policy "members can read themselves" on public.app_members for select to 
 create policy "members can access images" on public.receipt_images for all to authenticated using (public.is_app_member()) with check (public.is_app_member());
 create policy "members can access receipts" on public.receipts for all to authenticated using (public.is_app_member()) with check (public.is_app_member());
 create policy "members can access balance payments" on public.balance_payments for all to authenticated using (public.is_app_member()) with check (public.is_app_member());
+create policy "members can access todo items" on public.todo_items for all to authenticated using (public.is_app_member()) with check (public.is_app_member());
 create policy "members can access items" on public.receipt_items for all to authenticated using (public.is_app_member()) with check (public.is_app_member());
 create policy "members can access shares" on public.item_shares for all to authenticated using (public.is_app_member()) with check (public.is_app_member());
 insert into storage.buckets (id, name, public) values ('receipt-images', 'receipt-images', false) on conflict (id) do update set public = false;

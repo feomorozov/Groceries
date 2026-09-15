@@ -1,21 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { allocateReceipt, calculateBalances } from "./money";
-import { ALL_IDS, type BalancePayment, type Receipt, type ReceiptInput, type ReceiptItem, type RoommateId, type TripSummary } from "./types";
+import { ALL_IDS, type BalancePayment, type Receipt, type ReceiptInput, type ReceiptItem, type RoommateId, type TodoItem, type TripSummary } from "./types";
 
 type ReceiptRow = { id: string; is_complete?: boolean; merchant: string; purchased_at: string; payer_id: RoommateId; subtotal_cents: number; tax_cents: number; adjustment_cents: number; total_cents: number; image_id: string | null; created_at: string; updated_at: string; receipt_items?: ItemRow[] };
 type ItemRow = { id: string; sku: string | null; raw_description: string | null; description: string; quantity: string | null; unit_price_cents: number | null; item_discount_cents: number | null; line_total_cents: number; is_uncertain: boolean | null; sort_order: number; item_shares?: ShareRow[] };
 type ShareRow = { roommate_id: RoommateId; allocated_cents: number };
 type PaymentRow = { id: string; payer_id: RoommateId; recipient_id: RoommateId; amount_cents: number; created_at: string };
+type TodoRow = { id: string; roommate_id: RoommateId; text: string; completed: boolean; created_at: string; updated_at: string };
 export type StoredImage = { id: string; objectPath: string; mime: string };
 
 type DatabaseError = { message: string; code?: string };
 function fail(error: DatabaseError | null) { if (error) throw new Error(error.message); }
 function isMissingPaymentsTable(error: DatabaseError | null) { return error?.code === "42P01" || (error?.code === "PGRST205" && error.message.includes("balance_payments")); }
+function isMissingTodosTable(error: DatabaseError | null) { return error?.code === "42P01" || (error?.code === "PGRST205" && error.message.includes("todo_items")); }
 function toReceipt(row: ReceiptRow): Receipt {
   return { id: row.id, isComplete: row.is_complete ?? true, merchant: row.merchant, purchasedAt: row.purchased_at, payerId: row.payer_id, subtotalCents: row.subtotal_cents, taxCents: row.tax_cents, adjustmentCents: row.adjustment_cents, totalCents: row.total_cents, imageId: row.image_id, createdAt: row.created_at, updatedAt: row.updated_at,
     items: (row.receipt_items ?? []).sort((a, b) => a.sort_order - b.sort_order).map((item): ReceiptItem => ({ id: item.id, sku: item.sku ?? null, rawDescription: item.raw_description ?? null, description: item.description, quantity: item.quantity, unitPriceCents: item.unit_price_cents, itemDiscountCents: item.item_discount_cents ?? null, lineTotalCents: item.line_total_cents, isUncertain: item.is_uncertain ?? false, roommateIds: (item.item_shares ?? []).map((share) => share.roommate_id).filter((id): id is RoommateId => ALL_IDS.includes(id)) })) };
 }
 function toPayment(row: PaymentRow): BalancePayment { return { id: row.id, payerId: row.payer_id, recipientId: row.recipient_id, cents: row.amount_cents, createdAt: row.created_at }; }
+function toTodo(row: TodoRow): TodoItem { return { id: row.id, roommateId: row.roommate_id, text: row.text, completed: row.completed, createdAt: row.created_at, updatedAt: row.updated_at }; }
 const receiptSelect = "*, receipt_items(*, item_shares(roommate_id, allocated_cents))";
 
 export async function getReceipt(supabase: SupabaseClient, id: string): Promise<Receipt | null> {
@@ -31,6 +34,12 @@ export async function getPayments(supabase: SupabaseClient): Promise<BalancePaym
   if (isMissingPaymentsTable(error)) return [];
   fail(error);
   return (data as unknown as PaymentRow[]).map(toPayment);
+}
+export async function getTodoItems(supabase: SupabaseClient): Promise<TodoItem[]> {
+  const { data, error } = await supabase.from("todo_items").select("*").order("completed", { ascending: true }).order("created_at", { ascending: true });
+  if (isMissingTodosTable(error)) return [];
+  fail(error);
+  return (data as unknown as TodoRow[]).map(toTodo);
 }
 export async function getHomeData(supabase: SupabaseClient) {
   const [receipts, payments] = await Promise.all([getReceipts(supabase), getPayments(supabase)]);
@@ -56,6 +65,28 @@ export async function createPayment(supabase: SupabaseClient, payment: Omit<Bala
   if (isMissingPaymentsTable(error)) throw new Error("Payment history needs its Supabase migration. Run 0004_balance_payments.sql, then try again.");
   fail(error);
   return toPayment(data as unknown as PaymentRow);
+}
+export async function createTodoItem(supabase: SupabaseClient, todo: Pick<TodoItem, "roommateId" | "text">) {
+  const { data, error } = await supabase.from("todo_items").insert({ id: crypto.randomUUID(), roommate_id: todo.roommateId, text: todo.text, completed: false }).select().single();
+  if (isMissingTodosTable(error)) throw new Error("Grocery lists need their Supabase migration. Run 0006_todo_items.sql, then try again.");
+  fail(error);
+  return toTodo(data as unknown as TodoRow);
+}
+export async function updateTodoItem(supabase: SupabaseClient, id: string, update: Pick<Partial<TodoItem>, "text" | "completed">) {
+  const changes: { text?: string; completed?: boolean; updated_at: string } = { updated_at: new Date().toISOString() };
+  if (update.text !== undefined) changes.text = update.text;
+  if (update.completed !== undefined) changes.completed = update.completed;
+  const { data, error } = await supabase.from("todo_items").update(changes).eq("id", id).select().maybeSingle();
+  if (isMissingTodosTable(error)) throw new Error("Grocery lists need their Supabase migration. Run 0006_todo_items.sql, then try again.");
+  fail(error);
+  if (!data) throw new Error("Grocery item not found.");
+  return toTodo(data as unknown as TodoRow);
+}
+export async function deleteTodoItem(supabase: SupabaseClient, id: string) {
+  const { error, count } = await supabase.from("todo_items").delete({ count: "exact" }).eq("id", id);
+  if (isMissingTodosTable(error)) throw new Error("Grocery lists need their Supabase migration. Run 0006_todo_items.sql, then try again.");
+  fail(error);
+  if (count === 0) throw new Error("Grocery item not found.");
 }
 export async function updateReceipt(supabase: SupabaseClient, id: string, receipt: ReceiptInput, expectedUpdatedAt: string) { if (id !== receipt.id) throw new Error("Receipt ID mismatch."); return saveReceipt(supabase, receipt, expectedUpdatedAt); }
 export async function deleteReceipt(supabase: SupabaseClient, id: string, expectedUpdatedAt: string) {
