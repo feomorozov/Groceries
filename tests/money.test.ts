@@ -23,6 +23,7 @@ test("allocations always reconcile with discounts and negative lines", () => { c
 test("editing a receipt changes derived balances", () => { const old=calculateBalances([receipt("a","michael",[[1000,["kevin"]]])])[0]; const edited=calculateBalances([receipt("a","michael",[[400,["kevin"]]])])[0]; assert.equal(old.cents,1000); assert.equal(edited.cents,400); });
 test("deleting a receipt removes it from derived balances", () => { const before=calculateBalances([receipt("a","michael",[[1000,["kevin"]]])])[0]; const after=calculateBalances([])[0]; assert.equal(before.cents,1000); assert.equal(after.cents,0); });
 test("incomplete receipts do not affect balances", () => { const balance=calculateBalances([receipt("a","michael",[[1000,[]]],{isComplete:false})])[0]; assert.equal(balance.cents,0); });
+test("malformed completed receipts do not break the balance page", () => { const balance=calculateBalances([receipt("a","michael",[[1000,[]]])])[0]; assert.equal(balance.cents,0); });
 test("incomplete receipts can be saved before names and shares are finished", () => {
   const draft = receipt("00000000-0000-4000-8000-000000000099", "michael", [[1000, []]], { isComplete:false, merchant:"", items:[{ id:"00000000-0000-4000-8000-000000000001", sku:null, rawDescription:null, description:"", quantity:null, unitPriceCents:null, itemDiscountCents:null, lineTotalCents:1000, isUncertain:false, roommateIds:[] }] });
   assert.equal(receiptSchema.parse(draft).isComplete, false);
