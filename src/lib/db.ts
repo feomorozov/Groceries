@@ -47,13 +47,19 @@ export async function getHomeData(supabase: SupabaseClient) {
   const trips: TripSummary[] = receipts.map(({ items, ...receipt }) => ({ ...receipt, itemCount: items.length }));
   return { receipts, trips, payments, balances: calculateBalances(receipts, payments) };
 }
-function payload(receipt: ReceiptInput) {
-  if (!receipt.isComplete) return { ...receipt, items: receipt.items.map((item) => ({ ...item, shares: [] })) };
+export function receiptPayload(receipt: ReceiptInput) {
+  if (!receipt.isComplete) return {
+    ...receipt,
+    items: receipt.items.map((item) => ({
+      ...item,
+      shares: item.roommateIds.map((roommateId) => ({ roommateId, allocatedCents: 0 })),
+    })),
+  };
   const allocation = allocateReceipt(receipt);
   return { ...receipt, items: receipt.items.map((item, index) => ({ ...item, shares: allocation.items[index].shares.map((share) => ({ roommateId: share.roommateId, allocatedCents: share.allocatedCents })) })) };
 }
 async function saveReceipt(supabase: SupabaseClient, receipt: ReceiptInput, expectedUpdatedAt: string | null) {
-  const { error } = await supabase.rpc("save_receipt", { p_receipt: payload(receipt), p_expected_updated_at: expectedUpdatedAt }); fail(error);
+  const { error } = await supabase.rpc("save_receipt", { p_receipt: receiptPayload(receipt), p_expected_updated_at: expectedUpdatedAt }); fail(error);
   const saved = await getReceipt(supabase, receipt.id); if (!saved) throw new Error("Receipt not found after saving."); return saved;
 }
 export function createReceipt(supabase: SupabaseClient, receipt: ReceiptInput) { return saveReceipt(supabase, receipt, null); }

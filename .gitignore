@@ -9,3 +9,5 @@ playwright-report/
 .playwright-browsers/
 artifacts/
 *.tsbuildinfo
+
+.vercel/

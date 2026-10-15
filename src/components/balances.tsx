@@ -12,6 +12,9 @@ function TransferIcon() {
 function EyeIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Zm9.5 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /></svg>;
 }
+function CloseIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>;
+}
 function relationship(balance: PairBalance) {
   return balance.debtor ? `${nameOf(balance.debtor)} → ${nameOf(balance.creditor!)}` : `${nameOf(balance.first)} · ${nameOf(balance.second)}`;
 }
@@ -72,6 +75,11 @@ export function Balances({ balances, payments, receipts }: { balances: PairBalan
   const openPayment = (balance: PairBalance) => { if (!balance.debtor || !balance.creditor) return; setSelected(balance); setAmount(moneyInput(balance.cents)); setError(""); };
   const openHistory = (balance: PairBalance) => setHistory(balance);
   const closePayment = () => paymentDialog.current?.close();
+  const closeHistory = () => historyDialog.current?.close();
+  const closeHistoryOnBackdrop = (event: React.MouseEvent<HTMLDialogElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeHistory();
+  };
   const pairPayments = history ? payments.filter((payment) => (payment.payerId === history.first && payment.recipientId === history.second) || (payment.payerId === history.second && payment.recipientId === history.first)) : [];
   const pairCharges = history ? chargesForPair(receipts, history) : [];
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -108,15 +116,16 @@ export function Balances({ balances, payments, receipts }: { balances: PairBalan
         <div className="dialog-actions"><button type="button" className="secondary-btn" onClick={closePayment}>Cancel</button><button type="submit" className="primary" disabled={saving}>{saving ? "Recording…" : "Mark as paid"}</button></div>
       </form>}
     </dialog>
-    <dialog ref={historyDialog} aria-labelledby="pair-history-title" onClose={() => setHistory(null)}>
+    <dialog ref={historyDialog} className="history-dialog" aria-labelledby="pair-history-title" onClick={closeHistoryOnBackdrop} onClose={() => setHistory(null)}>
       {history && <>
+        <button type="button" className="dialog-close" aria-label="Close balance details" onClick={closeHistory}><CloseIcon /></button>
         <h2 id="pair-history-title">Balance details</h2>
         <p className="muted payment-copy">{nameOf(history.first)} and {nameOf(history.second)}</p>
         <h3 className="dialog-section-title">Charges from trips</h3>
         {pairCharges.length === 0 ? <p className="dialog-empty">No item charges have been recorded for this balance.</p> : <div className="dialog-transaction-list">{pairCharges.map((charge) => <Link className="dialog-transaction dialog-charge" href={`/receipts/${charge.receiptId}`} key={charge.id}><span><b>{charge.item}</b><small>{charge.merchant || "Untitled receipt"} · {displayDate(charge.purchasedAt)} · {charge.cents < 0 ? `Credit to ${nameOf(charge.debtor)}` : `${nameOf(charge.debtor)} owes ${nameOf(charge.creditor)}`}</small></span><strong>{formatMoney(charge.cents)}</strong></Link>)}</div>}
         <h3 className="dialog-section-title payment-history-heading">Payment history</h3>
         {pairPayments.length === 0 ? <p className="dialog-empty">No payments have been recorded for this balance.</p> : <div className="dialog-transaction-list">{pairPayments.map((payment) => <div className="dialog-transaction" key={payment.id}><span><b>{nameOf(payment.payerId)}</b> paid <b>{nameOf(payment.recipientId)}</b><small>{displayTimestamp(payment.createdAt)}</small></span><strong>{formatMoney(payment.cents)}</strong></div>)}</div>}
-        <div className="dialog-actions"><button type="button" className="secondary-btn" onClick={() => historyDialog.current?.close()}>Close</button></div>
+        <div className="dialog-actions"><button type="button" className="secondary-btn" onClick={closeHistory}>Close</button></div>
       </>}
     </dialog>
   </>;

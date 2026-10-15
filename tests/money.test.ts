@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { allocateReceipt, allocateWeighted, calculateBalances } from "../src/lib/money";
+import { receiptPayload } from "../src/lib/db";
 import type { ReceiptInput, RoommateId } from "../src/lib/types";
 import { receiptSchema } from "../src/lib/validation";
 
@@ -28,6 +29,14 @@ test("incomplete receipts can be saved before names and shares are finished", ()
   const draft = receipt("00000000-0000-4000-8000-000000000099", "michael", [[1000, []]], { isComplete:false, merchant:"", items:[{ id:"00000000-0000-4000-8000-000000000001", sku:null, rawDescription:null, description:"", quantity:null, unitPriceCents:null, itemDiscountCents:null, lineTotalCents:1000, isUncertain:false, roommateIds:[] }] });
   assert.equal(receiptSchema.parse(draft).isComplete, false);
   assert.throws(() => receiptSchema.parse({ ...draft, isComplete:true }));
+});
+test("incomplete receipts preserve partial roommate assignments", () => {
+  const draft = receipt("00000000-0000-4000-8000-000000000099", "michael", [[700, ["kevin"]], [300, []]], { isComplete:false });
+  const saved = receiptPayload(draft);
+  assert.deepEqual(saved.items.map((item) => item.shares), [
+    [{ roommateId:"kevin", allocatedCents:0 }],
+    [],
+  ]);
 });
 test("recorded payments reduce a pair's outstanding balance", () => {
   const payments = [{ id:"00000000-0000-4000-8000-000000000010", payerId:"kevin" as RoommateId, recipientId:"michael" as RoommateId, cents:400, createdAt:"2026-09-13T12:00:00.000Z" }];

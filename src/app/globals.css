@@ -136,6 +136,11 @@ h2 { margin:0; font-size:18px; line-height:1.2; letter-spacing:-.015em; font-wei
 .diagnostics pre { max-height:260px; overflow:auto; margin:7px 0 0; padding:10px; border:1px solid var(--line); background:var(--soft); color:var(--secondary); font:11px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
 dialog { position:fixed; top:50%; left:50%; width:min(100% - 40px,560px); max-height:calc(100dvh - 40px); margin:0; transform:translate(-50%,-50%); overflow:auto; border:0; border-radius:8px; padding:25px; box-shadow:0 16px 60px rgba(0,0,0,.18); }
 dialog::backdrop { background:rgba(0,0,0,.25); }
+.history-dialog h2 { padding-right:38px; }
+.dialog-close { position:absolute; top:14px; right:14px; display:grid; width:34px; height:34px; place-items:center; border:0; border-radius:50%; background:transparent; color:var(--secondary); cursor:pointer; }
+.dialog-close:hover { background:var(--soft); color:var(--ink); }
+.dialog-close:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+.dialog-close svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; }
 .dialog-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:24px; }
 .payment-copy { margin:10px 0 24px; font-size:14px; line-height:1.5; }
 .payment-field { display:grid; gap:7px; color:var(--secondary); font-size:13px; }
